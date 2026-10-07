@@ -452,16 +452,27 @@ class TeachingSessionService(private val project: Project) : Disposable {
     private fun registerEditorListeners() {
         val eventMulticaster = EditorFactory.getInstance().eventMulticaster
 
-        // 1. 文档内容变动监听 (Delta 广播)
+        // 1. 文档内容变动监听 (Delta 广播) - 严格仅限当前活动源码文件，杜绝控制台/构建日志干扰
         eventMulticaster.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
                 if (status == ConnectionStatus.IDLE) return
                 if (RemoteApplyGuard.isRemoteUpdating) return
                 if (event.document.getUserData(RemoteApplyGuard.IS_REMOTE_EDIT_KEY) == true) return
 
+                // 核心过滤：必须是当前老师活动选中的代码编辑器
+                val currentEditor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
+                if (currentEditor.document != event.document) return
+
+                val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
+                if (!file.isValid || file.isDirectory) return
+
+                val basePath = project.basePath ?: return
+                if (!file.path.startsWith(basePath)) return
+
                 val delta = JsonObject().apply {
                     addProperty("type", "code_delta")
                     val payload = JsonObject().apply {
+                        addProperty("filePath", getRelativePath(file))
                         addProperty("rangeOffset", event.offset)
                         addProperty("oldLength", event.oldLength)
                         addProperty("text", event.newFragment.toString())
@@ -473,10 +484,17 @@ class TeachingSessionService(private val project: Project) : Disposable {
             }
         }, this)
 
-        // 2. 老师光标与选区变动监听 (Cursor 广播)
+        // 2. 老师光标与选区变动监听 (Cursor 广播) - 严格仅限当前活动代码编辑器
         eventMulticaster.addCaretListener(object : CaretListener {
             override fun caretPositionChanged(event: CaretEvent) {
                 if (status == ConnectionStatus.IDLE) return
+                val currentEditor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
+                if (event.editor != currentEditor) return
+
+                val file = FileDocumentManager.getInstance().getFile(currentEditor.document) ?: return
+                val basePath = project.basePath ?: return
+                if (!file.path.startsWith(basePath)) return
+
                 val caret = event.caret ?: return
                 val pos = caret.logicalPosition
 
@@ -514,14 +532,18 @@ class TeachingSessionService(private val project: Project) : Disposable {
                 broadcastTabs()
                 ApplicationManager.getApplication().invokeLater {
                     val editor = event.manager.selectedTextEditor ?: return@invokeLater
-                    val file = event.newFile
+                    val file = event.newFile ?: return@invokeLater
+                    if (!file.isValid || file.isDirectory) return@invokeLater
+                    val basePath = project.basePath ?: return@invokeLater
+                    if (!file.path.startsWith(basePath)) return@invokeLater
+
                     val relPath = getRelativePath(file)
                     val full = JsonObject().apply {
                         addProperty("type", "code_full")
                         val payload = JsonObject().apply {
                             addProperty("filePath", relPath)
-                            addProperty("fileName", file?.name ?: "Unknown")
-                            addProperty("language", mapLanguage(file?.extension))
+                            addProperty("fileName", file.name)
+                            addProperty("language", mapLanguage(file.extension))
                             addProperty("content", editor.document.text)
                             addProperty("version", seqCounter.incrementAndGet())
                         }
@@ -741,15 +763,18 @@ class TeachingSessionService(private val project: Project) : Disposable {
     private fun sendCurrentEditorSnapshot(conn: WebSocket) {
         val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
         val doc = editor.document
-        val file = FileDocumentManager.getInstance().getFile(doc)
+        val file = FileDocumentManager.getInstance().getFile(doc) ?: return
+        if (!file.isValid || file.isDirectory) return
+        val basePath = project.basePath
+        if (basePath != null && !file.path.startsWith(basePath)) return
         val relPath = getRelativePath(file)
 
         val full = JsonObject().apply {
             addProperty("type", "code_full")
             val payload = JsonObject().apply {
                 addProperty("filePath", relPath)
-                addProperty("fileName", file?.name ?: "Main.java")
-                addProperty("language", mapLanguage(file?.extension))
+                addProperty("fileName", file.name)
+                addProperty("language", mapLanguage(file.extension))
                 addProperty("content", doc.text)
                 addProperty("version", seqCounter.incrementAndGet())
             }

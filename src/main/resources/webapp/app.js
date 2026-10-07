@@ -554,6 +554,10 @@
 
   function handleCodeDelta(payload) {
     if (!State.editor || !payload) return;
+    // 忽略与当前活动查看文件不匹配的差量更新
+    if (payload.filePath && State.currentFilePath && payload.filePath !== State.currentFilePath) {
+      return;
+    }
     State.isApplyingRemoteUpdate = true;
     try {
       const model = State.editor.getModel();
