@@ -236,9 +236,8 @@ class TeachingSessionService(private val project: Project) : Disposable {
                     id = studentId,
                     name = studentName,
                     role = UserRole.STUDENT,
-                    status = ConnectionStatus.CONNECTED,
                     latencyMs = 12,
-                    currentFile = "Active.java"
+                    activeFile = "Active.java"
                 ))
                 LOG.info("[EduPlus] 学生已连接: $studentName ($studentId)")
 
