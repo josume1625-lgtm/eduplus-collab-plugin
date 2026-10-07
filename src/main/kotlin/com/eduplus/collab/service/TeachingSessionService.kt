@@ -726,7 +726,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                             broadcastAndCache(startMsg)
                         }
                         is OutputBuildEvent -> {
-                            val text = event.message
+                            val text = (event as BuildEvent).message
                             if (!text.isNullOrBlank()) {
                                 val isStderr = !event.isStdOut
                                 val outMsg = JsonObject().apply {
