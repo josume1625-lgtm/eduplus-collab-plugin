@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EduPlus 教学协同编辑器 - 学生端</title>
+  <!-- 本地样式 -->
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app-container">
+    <!-- 顶部协同状态导航栏 -->
+    <header id="top-navbar">
+      <div class="nav-left">
+        <div class="brand-logo">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">EduPlus 协同课堂</span>
+        </div>
+        <div class="classroom-info">
+          <span class="badge badge-room" id="roomBadge">课堂: Loading...</span>
+          <span class="badge badge-user" id="userBadge">学生: Loading...</span>
+        </div>
+      </div>
+
+      <div class="nav-center">
+        <!-- 老师演示模式与只读锁状态 -->
+        <div class="lock-indicator" id="lockIndicator">
+          <span class="lock-icon" id="lockIcon">🔓</span>
+          <span class="lock-text" id="lockText">自主编辑模式</span>
+        </div>
+        <div class="follow-teacher-toggle" id="followTeacherToggle" title="当老师讲解时，窗口自动平滑滚至老师光标处">
+          <input type="checkbox" id="followTeacherCheckbox" checked />
+          <label for="followTeacherCheckbox">跟随老师视口</label>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <!-- 网络延迟与协同状态灯 -->
+        <div class="network-latency" id="networkLatency" title="WebSocket 双向延迟">
+          <span class="latency-dot"></span>
+          <span class="latency-val" id="latencyVal">-- ms</span>
+        </div>
+        <div class="status-capsule status-connecting" id="connStatusCapsule">
+          <span class="status-indicator-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">正在连接...</span>
+        </div>
+        <button class="btn btn-reconnect" id="btnReconnect" style="display: none;">手动重连</button>
+      </div>
+    </header>
+
+    <!-- 主编辑器区域 -->
+    <main id="editor-container">
+      <!-- Monaco Editor 挂载容器 -->
+      <div id="monaco-host"></div>
+    </main>
+
+    <!-- 底部状态栏 -->
+    <footer id="bottom-statusbar">
+      <div class="footer-left">
+        <span class="footer-item" id="fileInfo">📄 Main.java (只读模式联动)</span>
+        <span class="footer-item" id="cursorInfo">行 1, 列 1</span>
+        <span class="footer-item" id="selectionInfo">未选择</span>
+      </div>
+      <div class="footer-right">
+        <span class="footer-item teacher-state-badge" id="teacherPresenceBadge">
+          <span class="teacher-dot"></span> 老师在线
+        </span>
+        <span class="footer-item" id="encodingInfo">UTF-8</span>
+        <span class="footer-item" id="syntaxInfo">Java</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Monaco Editor 本地化 AMD 加载器（由 IDEA 插件本地 HTTP 提供，无须外部网络） -->
+  <script src="./vs/loader.js"></script>
+  <!-- 业务核心脚本 -->
+  <script src="./app.js"></script>
+</body>
+</html>

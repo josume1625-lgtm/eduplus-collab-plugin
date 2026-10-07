@@ -1,0 +1,37 @@
+name: Build IntelliJ Plugin (Free Cloud CI)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # 支持网页端手动一键触发编译
+
+jobs:
+  build:
+    name: Build & Package EduPlus Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.8'
+
+      - name: Build Plugin Distribution (.zip)
+        run: gradle buildPlugin --no-daemon --stacktrace
+
+      - name: Upload Plugin Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EduPlus-Collab-Plugin-Distribution
+          path: build/distributions/*.zip
+          retention-days: 14
