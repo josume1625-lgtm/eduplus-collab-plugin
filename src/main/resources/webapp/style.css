@@ -1,0 +1,380 @@
+/* ==========================================================================
+   EduPlus 教学协同编辑器 - 学生端样式体系
+   - 配色哲学：Dark Mode 现代深灰背景 (#1e1e1e)
+   - 老师主色调：高保真科技蓝 (#2196f3 / rgba(33, 150, 243, 0.25))
+   - 学生主色调：活力暖橙色 (#ff9800 / rgba(255, 152, 0, 0.25))
+   ========================================================================== */
+
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2d2d30;
+  --border-color: #3e3e42;
+  --text-main: #cccccc;
+  --text-bright: #ffffff;
+  --text-muted: #858585;
+
+  /* 老师视觉标记系统（蓝色） */
+  --teacher-color: #2196f3;
+  --teacher-color-glow: rgba(33, 150, 243, 0.85);
+  --teacher-selection-bg: rgba(33, 150, 243, 0.25);
+  --teacher-badge-bg: #1976d2;
+  --teacher-badge-text: #ffffff;
+
+  /* 学生视觉标记系统（橙色） */
+  --student-color: #ff9800;
+  --student-selection-bg: rgba(255, 152, 0, 0.25);
+
+  /* 状态指示颜色 */
+  --status-connected: #4caf50;
+  --status-reconnecting: #ffb300;
+  --status-disconnected: #f44336;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  user-select: none;
+}
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ==========================================================================
+   1. 顶部协同状态导航栏
+   ========================================================================== */
+#top-navbar {
+  height: 44px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.nav-left, .nav-center, .nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-bright);
+}
+
+.brand-logo .logo-icon {
+  color: var(--student-color);
+  font-size: 16px;
+}
+
+.classroom-info {
+  display: flex;
+  gap: 6px;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.badge-room {
+  color: #64b5f6;
+  border-color: rgba(100, 181, 246, 0.4);
+}
+
+.badge-user {
+  color: #ffb74d;
+  border-color: rgba(255, 183, 77, 0.4);
+}
+
+/* 顶部中间：锁状态与视角跟随 */
+.lock-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.lock-indicator.is-locked {
+  background-color: rgba(244, 67, 54, 0.15);
+  border-color: rgba(244, 67, 54, 0.4);
+  color: #ff8a80;
+}
+
+.lock-indicator.is-unlocked {
+  background-color: rgba(76, 175, 80, 0.15);
+  border-color: rgba(76, 175, 80, 0.3);
+  color: #a5d6a7;
+}
+
+.follow-teacher-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.follow-teacher-toggle input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--teacher-color);
+}
+
+/* 顶部右侧：网络与重连状态条 */
+.network-latency {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--text-muted);
+}
+
+.latency-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--status-connected);
+}
+
+.status-capsule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.status-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* 状态胶囊三色变换 */
+.status-capsule.status-connected {
+  background-color: rgba(76, 175, 80, 0.15);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  color: #81c784;
+}
+.status-capsule.status-connected .status-indicator-dot {
+  background-color: var(--status-connected);
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.8);
+}
+
+.status-capsule.status-reconnecting {
+  background-color: rgba(255, 179, 0, 0.15);
+  border: 1px solid rgba(255, 179, 0, 0.4);
+  color: #ffd54f;
+  animation: pulseWarning 1.5s infinite ease-in-out;
+}
+.status-capsule.status-reconnecting .status-indicator-dot {
+  background-color: var(--status-reconnecting);
+  box-shadow: 0 0 6px rgba(255, 179, 0, 0.8);
+}
+
+.status-capsule.status-disconnected {
+  background-color: rgba(244, 67, 54, 0.15);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+  color: #e57373;
+}
+.status-capsule.status-disconnected .status-indicator-dot {
+  background-color: var(--status-disconnected);
+  box-shadow: 0 0 6px rgba(244, 67, 54, 0.8);
+}
+
+@keyframes pulseWarning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.btn-reconnect {
+  background-color: #d32f2f;
+  color: #fff;
+  border: none;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-reconnect:hover {
+  background-color: #f44336;
+}
+
+/* ==========================================================================
+   2. 主编辑区容器
+   ========================================================================== */
+#editor-container {
+  flex: 1;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+#monaco-host {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* ==========================================================================
+   3. 双光标与选区可视化渲染核心 CSS (Monaco deltaDecorations Hook)
+   ========================================================================== */
+
+/* (1) 老师垂直光标条：呼吸灯闪烁蓝光效果 */
+.teacher-cursor {
+  position: relative;
+  border-left: 2.5px solid var(--teacher-color) !important;
+  margin-left: -1px;
+  z-index: 100;
+  animation: teacherCursorPulse 1.2s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes teacherCursorPulse {
+  0%, 100% {
+    border-left-color: var(--teacher-color);
+    box-shadow: 0 0 8px var(--teacher-color-glow);
+    opacity: 1;
+  }
+  50% {
+    border-left-color: rgba(33, 150, 243, 0.4);
+    box-shadow: 0 0 2px rgba(33, 150, 243, 0.3);
+    opacity: 0.6;
+  }
+}
+
+/* (2) 老师悬浮气泡徽章（“👨‍🏫 老师”标签） */
+.teacher-cursor-badge {
+  position: absolute !important;
+  top: -24px !important;
+  left: -4px !important;
+  background: linear-gradient(135deg, #1976d2, #2196f3);
+  color: #ffffff !important;
+  font-size: 10px !important;
+  font-weight: 600;
+  line-height: 14px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 6px var(--teacher-color-glow);
+  z-index: 110;
+  transform: translateY(0);
+  transition: transform 0.15s ease-out;
+}
+
+/* 气泡底部朝下小箭头 */
+.teacher-cursor-badge::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 6px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #1976d2;
+}
+
+/* (3) 老师选区高亮（半透明科技蓝） */
+.teacher-selection {
+  background-color: var(--teacher-selection-bg) !important;
+  border-top: 1px solid rgba(33, 150, 243, 0.5);
+  border-bottom: 1px solid rgba(33, 150, 243, 0.5);
+  border-radius: 2px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* (4) 老师行高亮（弱辅助标记） */
+.teacher-active-line-margin {
+  background-color: rgba(33, 150, 243, 0.8) !important;
+  width: 4px !important;
+  margin-left: 2px;
+  border-radius: 2px;
+}
+
+/* ==========================================================================
+   4. 底部状态栏
+   ========================================================================== */
+#bottom-statusbar {
+  height: 24px;
+  background-color: #007acc; /* 默认底栏色调 */
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 11px;
+  z-index: 100;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* 当老师处于演示编辑状态时，底栏呈现警示协同紫色/暗蓝 */
+#bottom-statusbar.is-teacher-active {
+  background-color: #1976d2;
+}
+
+.footer-left, .footer-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.footer-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: default;
+}
+
+.teacher-state-badge .teacher-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #64ffda;
+  display: inline-block;
+  box-shadow: 0 0 5px #64ffda;
+}
