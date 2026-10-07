@@ -97,6 +97,19 @@ class RemoteCursorManager(private val project: Project) : Disposable {
     }
 
     /**
+     * 根据学生ID移除远程光标与选区
+     */
+    fun removeStudentCursor(studentId: String) {
+        val session = studentVisuals.remove(studentId) ?: return
+        ApplicationManager.getApplication().invokeLater {
+            if (session.editor.isDisposed) return@invokeLater
+            val markupModel = session.editor.markupModel
+            session.caretHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
+            session.selectionHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
+        }
+    }
+
+    /**
      * 清理编辑器内的所有学生远程高亮
      */
     fun clearAll(editor: Editor) {
