@@ -26,6 +26,12 @@ jobs:
         with:
           gradle-version: '8.8'
 
+      - name: Embed 100% Offline Monaco Assets
+        run: |
+          mkdir -p src/main/resources/webapp/vs
+          curl -sL https://registry.npmmirror.com/monaco-editor/-/monaco-editor-0.45.0.tgz | tar -xz -C src/main/resources/webapp/vs --strip-components=3 package/min/vs
+          ls -la src/main/resources/webapp/vs/
+
       - name: Build Plugin Distribution (.zip)
         run: gradle buildPlugin --no-daemon --stacktrace
 

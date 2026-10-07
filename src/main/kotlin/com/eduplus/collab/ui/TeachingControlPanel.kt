@@ -24,6 +24,7 @@ import javax.swing.border.CompoundBorder
 
 /**
  * 教学协同右侧 ToolWindow 主控制面板
+ * 支持本地 127.0.0.1 及局域网 LAN IP 分享、教学模式切换、在线学生监控
  */
 class TeachingControlPanel(private val project: Project) : JBPanel<TeachingControlPanel>() {
 
@@ -39,15 +40,25 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
         isFocusPainted = false
     }
 
-    private val urlField = JBTextField().apply {
+    // 本地回环地址
+    private val localUrlField = JBTextField().apply {
         isEditable = false
         emptyText.text = "服务未启动"
     }
-    private val copyUrlButton = JButton("复制").apply {
-        toolTipText = "一键复制学生端加入链接"
+    private val copyLocalUrlButton = JButton("复制").apply {
+        toolTipText = "一键复制本机调试链接"
     }
     private val openBrowserButton = JButton("浏览器打开").apply {
-        toolTipText = "在默认浏览器中快速打开学生端页面进行同屏调试"
+        toolTipText = "在默认浏览器中打开学生端页面进行同屏验证"
+    }
+
+    // 局域网分享地址 (同 Wi-Fi 学生设备访问)
+    private val lanUrlField = JBTextField().apply {
+        isEditable = false
+        emptyText.text = "服务未启动"
+    }
+    private val copyLanUrlButton = JButton("复制局域网").apply {
+        toolTipText = "一键复制局域网分享链接供学生加入"
     }
 
     // 教学模式开关组件
@@ -79,7 +90,7 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
         mainContent.add(createHeaderSection())
         mainContent.add(Box.createVerticalStrut(12))
 
-        // 2. 本地访问地址与分享操作卡片
+        // 2. 本地与局域网访问地址卡片
         mainContent.add(createAddressSection())
         mainContent.add(Box.createVerticalStrut(12))
 
@@ -140,28 +151,60 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
                 JBUI.Borders.empty(10, 12)
             )
             alignmentX = Component.LEFT_ALIGNMENT
-            maximumSize = Dimension(Short.MAX_VALUE.toInt(), 105)
+            maximumSize = Dimension(Short.MAX_VALUE.toInt(), 150)
         }
 
-        val title = JBLabel("学生端接入访问地址").apply {
+        val title = JBLabel("课堂接入访问地址 (本地 / 局域网)").apply {
             font = JBFont.regular().asBold()
             alignmentX = Component.LEFT_ALIGNMENT
         }
         panel.add(title)
         panel.add(Box.createVerticalStrut(6))
 
-        val inputRow = JPanel(BorderLayout(6, 0)).apply {
+        // 本机地址行
+        val localLabel = JBLabel("💻 本机地址:").apply {
+            font = JBFont.small()
+            foreground = JBColor(0x666666, 0xAAAAAA)
+            alignmentX = Component.LEFT_ALIGNMENT
+        }
+        panel.add(localLabel)
+        panel.add(Box.createVerticalStrut(2))
+
+        val localRow = JPanel(BorderLayout(6, 0)).apply {
             isOpaque = false
             alignmentX = Component.LEFT_ALIGNMENT
-            add(urlField, BorderLayout.CENTER)
+            add(localUrlField, BorderLayout.CENTER)
             val btnBox = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
                 isOpaque = false
-                add(copyUrlButton)
+                add(copyLocalUrlButton)
                 add(openBrowserButton)
             }
             add(btnBox, BorderLayout.EAST)
         }
-        panel.add(inputRow)
+        panel.add(localRow)
+        panel.add(Box.createVerticalStrut(6))
+
+        // 局域网分享行
+        val lanLabel = JBLabel("🌐 局域网分享 (同 Wi-Fi 学生):").apply {
+            font = JBFont.small()
+            foreground = JBColor(0x666666, 0xAAAAAA)
+            alignmentX = Component.LEFT_ALIGNMENT
+        }
+        panel.add(lanLabel)
+        panel.add(Box.createVerticalStrut(2))
+
+        val lanRow = JPanel(BorderLayout(6, 0)).apply {
+            isOpaque = false
+            alignmentX = Component.LEFT_ALIGNMENT
+            add(lanUrlField, BorderLayout.CENTER)
+            val btnBox = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+                isOpaque = false
+                add(copyLanUrlButton)
+            }
+            add(btnBox, BorderLayout.EAST)
+        }
+        panel.add(lanRow)
+
         return panel
     }
 
@@ -220,38 +263,54 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
         }
         panel.add(title, BorderLayout.NORTH)
 
-        peerJList.border = JBUI.Borders.empty(4)
-        val listScroll = JBScrollPane(peerJList).apply {
-            preferredSize = Dimension(Short.MAX_VALUE.toInt(), 110)
+        val listScrollPane = JBScrollPane(peerJList).apply {
+            preferredSize = Dimension(260, 120)
+            border = JBUI.Borders.customLine(JBColor(0xE0E0E0, 0x3E4246), 1)
         }
-        panel.add(listScroll, BorderLayout.CENTER)
+        panel.add(listScrollPane, BorderLayout.CENTER)
+
         return panel
     }
 
     private fun bindActions() {
-        // 启停按钮
+        // 启停协同服务
         toggleServiceButton.addActionListener {
             if (sessionService.status == ConnectionStatus.IDLE) {
-                val ok = sessionService.startSession()
-                if (ok) {
-                    urlField.text = sessionService.accessUrl
+                val started = sessionService.startSession()
+                if (started) {
+                    localUrlField.text = sessionService.accessUrl
+                    lanUrlField.text = sessionService.lanAccessUrl
                     toggleServiceButton.text = "停止协同服务"
-                    toggleServiceButton.background = JBColor(0xD3, 0x2F)
+                    toggleServiceButton.background = JBColor(0xD32F2F, 0xC62828)
+                } else {
+                    Messages.showErrorDialog(project, "协同服务启动失败，请检查端口是否被占用。", "错误")
                 }
             } else {
                 sessionService.stopSession()
-                urlField.text = ""
+                localUrlField.text = ""
+                lanUrlField.text = ""
                 toggleServiceButton.text = "启动协同服务"
                 toggleServiceButton.background = JBColor(0x388E3C, 0x2E7D32)
             }
         }
 
-        // 复制链接
-        copyUrlButton.addActionListener {
+        // 复制本机链接
+        copyLocalUrlButton.addActionListener {
             val url = sessionService.accessUrl
             if (sessionService.status != ConnectionStatus.IDLE && url.isNotBlank()) {
                 CopyPasteManager.getInstance().setContents(StringSelection(url))
-                Messages.showInfoMessage(project, "学生端加入链接已复制到剪贴板！\n$url", "EduPlus 协同分享")
+                Messages.showInfoMessage(project, "本机调试链接已复制到剪贴板！\n$url", "EduPlus 协同分享")
+            } else {
+                Messages.showWarningDialog(project, "协同服务未启动，暂无可复制的接入链接。", "提示")
+            }
+        }
+
+        // 复制局域网分享链接
+        copyLanUrlButton.addActionListener {
+            val url = sessionService.lanAccessUrl
+            if (sessionService.status != ConnectionStatus.IDLE && url.isNotBlank()) {
+                CopyPasteManager.getInstance().setContents(StringSelection(url))
+                Messages.showInfoMessage(project, "局域网分享链接已复制到剪贴板！可发给同一 Wi-Fi 下的学生：\n$url", "EduPlus 局域网分享")
             } else {
                 Messages.showWarningDialog(project, "协同服务未启动，暂无可复制的接入链接。", "提示")
             }
@@ -286,11 +345,13 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
                     when (newStatus) {
                         ConnectionStatus.IDLE -> {
                             toggleServiceButton.text = "启动协同服务"
-                            urlField.text = ""
+                            localUrlField.text = ""
+                            lanUrlField.text = ""
                         }
                         ConnectionStatus.WAITING, ConnectionStatus.CONNECTED, ConnectionStatus.NETWORK_SHAKING -> {
                             toggleServiceButton.text = "停止协同服务"
-                            urlField.text = sessionService.accessUrl
+                            localUrlField.text = sessionService.accessUrl
+                            lanUrlField.text = sessionService.lanAccessUrl
                         }
                     }
                 }
@@ -322,6 +383,6 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
     }
 
     private fun updateModeHint(mode: TeachingMode) {
-        modeHintLabel.text = "<html>提示：${mode.description}</html>"
+        modeHintLabel.text = "说明: ${mode.description}"
     }
 }
