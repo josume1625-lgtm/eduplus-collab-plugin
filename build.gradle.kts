@@ -4,8 +4,8 @@ plugins {
     id("org.jetbrains.intellij") version "1.17.4"
 }
 
-group = property("pluginGroup").toString()
-version = property("pluginVersion").toString()
+group = "com.eduplus.collab"
+version = "1.0.0"
 
 repositories {
     mavenCentral()
@@ -33,14 +33,10 @@ dependencies {
 
 // IntelliJ Platform 配置
 intellij {
-    version.set(property("platformVersion").toString())
-    type.set(property("platformType").toString())
-    downloadSources.set(true)
+    version.set("2023.3.6")
+    type.set("IC")
+    downloadSources.set(false)
     updateSinceUntilBuild.set(true)
-
-    plugins.set(listOf(
-        // 可选依赖插件，如 git4idea 等
-    ))
 }
 
 tasks {
@@ -55,22 +51,15 @@ tasks {
     }
 
     patchPluginXml {
-        sinceBuild.set(property("pluginSinceBuild").toString())
-        untilBuild.set(property("pluginUntilBuild").toString())
+        sinceBuild.set("233")
+        untilBuild.set("242.*")
     }
 
-    signPlugin {
-        certificateChain.set(System.getenv("CERTIFICATE_CHAIN"))
-        privateKey.set(System.getenv("PRIVATE_KEY"))
-        password.set(System.getenv("PRIVATE_KEY_PASSWORD"))
-    }
-
-    publishPlugin {
-        token.set(System.getenv("PUBLISH_TOKEN"))
+    buildSearchableOptions {
+        enabled = false
     }
 
     runIde {
-        // 开发调试分配内存，防 OOM
         jvmArgs("-Xmx2048m", "-XX:+UseG1GC")
     }
 }
