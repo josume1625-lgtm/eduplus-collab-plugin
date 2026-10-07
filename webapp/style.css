@@ -159,6 +159,33 @@ html, body {
   cursor: pointer;
 }
 
+.btn-run {
+  background-color: #2e7d32;
+  color: #ffffff;
+  border: 1px solid #388e3c;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+}
+
+.btn-run:hover:not(:disabled) {
+  background-color: #388e3c;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
+}
+
+.btn-run:disabled {
+  background-color: #424242;
+  border-color: #555555;
+  color: #888888;
+  cursor: not-allowed;
+}
+
 .btn-tool {
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-color);

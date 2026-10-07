@@ -10,14 +10,28 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.intellij.build.BuildProgressListener
+import com.intellij.build.BuildViewManager
+import com.intellij.build.events.BuildEvent
+import com.intellij.build.events.FailureResult
+import com.intellij.build.events.FinishBuildEvent
+import com.intellij.build.events.OutputBuildEvent
+import com.intellij.build.events.StartBuildEvent
 import com.intellij.execution.ExecutionListener
 import com.intellij.execution.ExecutionManager
+import com.intellij.execution.ProgramRunnerUtil
+import com.intellij.execution.RunManager
+import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
@@ -32,6 +46,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.sun.net.httpserver.HttpExchange
@@ -45,6 +60,7 @@ import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
@@ -52,7 +68,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 教学协同会话服务 - Project 级单例
- * 负责本地/局域网 HTTP 静态资源服务、WebSocket 全双工通信、文件树同步、多页签同步及程序运行输出捕获
+ * 负责本地/局域网 HTTP 静态资源服务、WebSocket 全双工通信、文件树同步、多页签同步、
+ * 编译/构建错误与控制台全量转发、默认自由协同模式、学生申请运行及老师二次确认。
  */
 @Service(Service.Level.PROJECT)
 class TeachingSessionService(private val project: Project) : Disposable {
@@ -69,9 +86,13 @@ class TeachingSessionService(private val project: Project) : Disposable {
 
     private val listeners = CopyOnWriteArrayList<SessionEventListener>()
     private val currentStatus = AtomicReference(ConnectionStatus.IDLE)
-    private val currentMode = AtomicReference(TeachingMode.TEACHER_EXCLUSIVE)
+    // 默认双向输入的自由互动协同模式
+    private val currentMode = AtomicReference(TeachingMode.FREE_COLLABORATION)
     private val activePeers = CopyOnWriteArrayList<RemotePeer>()
     private val clientSockets = ConcurrentHashMap<String, WebSocket>()
+    private val attachedHandlers = Collections.newSetFromMap(ConcurrentHashMap<ProcessHandler, Boolean>())
+    // 缓存最近 200 条运行/编译日志，防止学生刚连接或刷新时遗漏首批运行结果
+    private val executionLogCache = CopyOnWriteArrayList<JsonObject>()
 
     var port: Int = 8765
         private set
@@ -130,6 +151,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
             startWebSocketServer()
             registerEditorListeners()
             registerExecutionListener()
+            registerBuildListener()
 
             updateStatus(ConnectionStatus.WAITING)
             LOG.info("[EduPlus] 协同服务启动成功 -> 本机: $accessUrl, 局域网: $lanAccessUrl, WS端口: $wsPort")
@@ -155,6 +177,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
             wsServer = null
             clientSockets.clear()
             activePeers.clear()
+            attachedHandlers.clear()
             remoteCursorManager?.dispose()
             remoteCursorManager = null
             updateStatus(ConnectionStatus.IDLE)
@@ -205,7 +228,6 @@ class TeachingSessionService(private val project: Project) : Disposable {
 
     /**
      * 启动本地/局域网 HTTP 静态资源服务 (托管 Monaco WebApp)
-     * 监听 0.0.0.0:$port，使得本机 127.0.0.1 和同局域网学生均可访问
      */
     private fun startHttpServer() {
         val server = HttpServer.create(InetSocketAddress(port), 0)
@@ -263,7 +285,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
     }
 
     /**
-     * 启动 WebSocket 全双工服务端 (监听 0.0.0.0:$wsPort)
+     * 启动 WebSocket 全双工服务端
      */
     private fun startWebSocketServer() {
         val server = object : WebSocketServer(InetSocketAddress(wsPort)) {
@@ -291,6 +313,11 @@ class TeachingSessionService(private val project: Project) : Disposable {
                 // 3. 发送当前活动编辑器全量代码
                 ApplicationManager.getApplication().invokeLater {
                     sendCurrentEditorSnapshot(conn)
+                }
+
+                // 4. 重放最近运行输出历史，杜绝第一次运行或刷新时错过结果
+                executionLogCache.forEach {
+                    try { if (conn.isOpen) conn.send(gson.toJson(it)) } catch (_: Exception) {}
                 }
             }
 
@@ -429,6 +456,40 @@ class TeachingSessionService(private val project: Project) : Disposable {
                 "refresh_tree_request" -> {
                     broadcastProjectTree(conn)
                 }
+                "student_request_run" -> {
+                    // 学生申请运行当前代码文件，弹出老师端二次确认对话框
+                    val payload = json.getAsJsonObject("payload") ?: return
+                    val studentId = payload.get("studentId")?.asString ?: "stu"
+                    val studentName = payload.get("studentName")?.asString ?: "学生"
+                    val filePath = payload.get("filePath")?.asString ?: "当前文件"
+
+                    ApplicationManager.getApplication().invokeLater {
+                        val answer = Messages.showYesNoDialog(
+                            project,
+                            "👨‍🎓 学生【$studentName】申请在您的本地 IDEA 中运行代码文件：\n\n📄 $filePath\n\n是否允许并立即执行该程序？",
+                            "EduPlus 协同课堂 - 代码运行申请",
+                            "允许运行 (Run)",
+                            "拒绝 (Reject)",
+                            Messages.getQuestionIcon()
+                        )
+
+                        val approved = (answer == Messages.YES)
+                        val respMsg = JsonObject().apply {
+                            addProperty("type", "student_run_response")
+                            val p = JsonObject().apply {
+                                addProperty("approved", approved)
+                                addProperty("studentId", studentId)
+                                addProperty("message", if (approved) "老师已批准运行申请，程序正在启动..." else "老师拒绝了此次运行申请。")
+                            }
+                            add("payload", p)
+                        }
+                        broadcastAndCache(respMsg)
+
+                        if (approved) {
+                            triggerRunActiveFile()
+                        }
+                    }
+                }
                 "heartbeat" -> {
                     val pong = JsonObject().apply {
                         addProperty("type", "heartbeat")
@@ -447,7 +508,37 @@ class TeachingSessionService(private val project: Project) : Disposable {
     }
 
     /**
-     * 注册本地 IDEA 事件监听器 (老师端上行广播)
+     * 触发本地 IDEA 运行当前活动配置或文件
+     */
+    fun triggerRunActiveFile() {
+        ApplicationManager.getApplication().invokeLater {
+            try {
+                val runManager = RunManager.getInstance(project)
+                val selectedConfig = runManager.selectedConfiguration
+                val executor = DefaultRunExecutor.getRunExecutorInstance()
+                if (selectedConfig != null && executor != null) {
+                    ProgramRunnerUtil.executeConfiguration(selectedConfig, executor)
+                    return@invokeLater
+                }
+
+                // Fallback: 如果没有选中的配置，通过 ActionManager 触发 Run
+                val actionManager = ActionManager.getInstance()
+                val runAction = actionManager.getAction("Run") ?: actionManager.getAction("RunClass")
+                if (runAction != null) {
+                    val dataContext = SimpleDataContext.getProjectContext(project)
+                    val actionEvent = AnActionEvent.createFromAnAction(
+                        runAction, null, ActionPlaces.UNKNOWN, dataContext
+                    )
+                    runAction.actionPerformed(actionEvent)
+                }
+            } catch (e: Throwable) {
+                LOG.warn("[EduPlus] 触发本地运行失败", e)
+            }
+        }
+    }
+
+    /**
+     * 注册本地 IDEA 编辑器监听器 (老师端上行广播)
      */
     private fun registerEditorListeners() {
         val eventMulticaster = EditorFactory.getInstance().eventMulticaster
@@ -459,7 +550,6 @@ class TeachingSessionService(private val project: Project) : Disposable {
                 if (RemoteApplyGuard.isRemoteUpdating) return
                 if (event.document.getUserData(RemoteApplyGuard.IS_REMOTE_EDIT_KEY) == true) return
 
-                // 核心过滤：必须是当前老师活动选中的代码编辑器
                 val currentEditor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
                 if (currentEditor.document != event.document) return
 
@@ -567,64 +657,179 @@ class TeachingSessionService(private val project: Project) : Disposable {
     }
 
     /**
-     * 注册程序运行输出监听器 (同步显示老师端运行结果到学生网页)
+     * 注册程序运行输出监听器 (同步显示老师端运行输出，尽早挂载避免遗漏首批打印)
      */
     private fun registerExecutionListener() {
         try {
             project.messageBus.connect(this).subscribe(
                 ExecutionManager.EXECUTION_TOPIC,
                 object : ExecutionListener {
+                    // 1. processStarting 尽早挂载监听器，在程序输出第一行之前完成捕获
+                    override fun processStarting(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
+                        attachProcessHandler(handler, env.runProfile.name)
+                    }
+
+                    // 2. processStarted 兜底挂载
                     override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
-                        val runTitle = env.runProfile.name
-                        val startMsg = JsonObject().apply {
-                            addProperty("type", "execution_status")
+                        attachProcessHandler(handler, env.runProfile.name)
+                    }
+
+                    // 3. processNotStarted 处理编译失败或无法启动的情形
+                    override fun processNotStarted(executorId: String, env: ExecutionEnvironment, cause: Throwable?) {
+                        val errMsg = JsonObject().apply {
+                            addProperty("type", "execution_output")
                             val p = JsonObject().apply {
-                                addProperty("status", "started")
-                                addProperty("title", runTitle)
-                                addProperty("time", System.currentTimeMillis())
+                                addProperty("text", "\n=== ❌ 进程未能启动: ${cause?.message ?: "编译失败或运行配置未就绪"} ===\n")
+                                addProperty("isStderr", true)
+                                addProperty("isSystem", true)
                             }
                             add("payload", p)
                         }
-                        broadcast(gson.toJson(startMsg))
+                        broadcastAndCache(errMsg)
 
-                        handler.addProcessListener(object : ProcessListener {
-                            override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
-                                val text = event.text ?: return
-                                val isStderr = ProcessOutputTypes.STDERR == outputType
-                                val isSystem = ProcessOutputTypes.SYSTEM == outputType
-                                val outMsg = JsonObject().apply {
-                                    addProperty("type", "execution_output")
-                                    val p = JsonObject().apply {
-                                        addProperty("text", text)
-                                        addProperty("isStderr", isStderr)
-                                        addProperty("isSystem", isSystem)
-                                    }
-                                    add("payload", p)
-                                }
-                                broadcast(gson.toJson(outMsg))
+                        val endMsg = JsonObject().apply {
+                            addProperty("type", "execution_status")
+                            val p = JsonObject().apply {
+                                addProperty("status", "terminated")
+                                addProperty("exitCode", -1)
                             }
-
-                            override fun processTerminated(event: ProcessEvent) {
-                                val endMsg = JsonObject().apply {
-                                    addProperty("type", "execution_status")
-                                    val p = JsonObject().apply {
-                                        addProperty("status", "terminated")
-                                        addProperty("exitCode", event.exitCode)
-                                    }
-                                    add("payload", p)
-                                }
-                                broadcast(gson.toJson(endMsg))
-                            }
-
-                            override fun startNotified(event: ProcessEvent) {}
-                            override fun processWillTerminate(event: ProcessEvent, willBeDestroyed: Boolean) {}
-                        })
+                            add("payload", p)
+                        }
+                        broadcastAndCache(endMsg)
                     }
                 }
             )
         } catch (e: Throwable) {
             LOG.warn("[EduPlus] 注册运行监听器失败", e)
         }
+    }
+
+    /**
+     * 注册项目编译/构建事件监听器 (完整转发编译过程输出与编译错误信息)
+     */
+    private fun registerBuildListener() {
+        try {
+            val buildViewManager = project.getService(BuildViewManager::class.java)
+            buildViewManager?.addListener(object : BuildProgressListener {
+                override fun onEvent(buildId: Any, event: BuildEvent) {
+                    when (event) {
+                        is StartBuildEvent -> {
+                            val startMsg = JsonObject().apply {
+                                addProperty("type", "execution_status")
+                                val p = JsonObject().apply {
+                                    addProperty("status", "started")
+                                    addProperty("title", "项目编译构建")
+                                    addProperty("time", System.currentTimeMillis())
+                                }
+                                add("payload", p)
+                            }
+                            broadcastAndCache(startMsg)
+                        }
+                        is OutputBuildEvent -> {
+                            val text = event.message
+                            if (!text.isNullOrBlank()) {
+                                val isStderr = !event.isStdOut
+                                val outMsg = JsonObject().apply {
+                                    addProperty("type", "execution_output")
+                                    val p = JsonObject().apply {
+                                        addProperty("text", text)
+                                        addProperty("isStderr", isStderr)
+                                        addProperty("isSystem", false)
+                                    }
+                                    add("payload", p)
+                                }
+                                broadcastAndCache(outMsg)
+                            }
+                        }
+                        is FinishBuildEvent -> {
+                            val result = event.result
+                            if (result is FailureResult) {
+                                val failureDetails = result.failures?.mapNotNull { it.message }?.joinToString("\n") ?: ""
+                                val errOut = JsonObject().apply {
+                                    addProperty("type", "execution_output")
+                                    val p = JsonObject().apply {
+                                        addProperty("text", "\n=== ❌ 编译构建未通过 ===\n$failureDetails\n")
+                                        addProperty("isStderr", true)
+                                        addProperty("isSystem", true)
+                                    }
+                                    add("payload", p)
+                                }
+                                broadcastAndCache(errOut)
+
+                                val endMsg = JsonObject().apply {
+                                    addProperty("type", "execution_status")
+                                    val p = JsonObject().apply {
+                                        addProperty("status", "terminated")
+                                        addProperty("exitCode", -1)
+                                    }
+                                    add("payload", p)
+                                }
+                                broadcastAndCache(endMsg)
+                            }
+                        }
+                    }
+                }
+            }, this)
+        } catch (e: Throwable) {
+            LOG.warn("[EduPlus] 注册构建输出监听器失败", e)
+        }
+    }
+
+    private fun attachProcessHandler(handler: ProcessHandler, runTitle: String) {
+        if (!attachedHandlers.add(handler)) return
+
+        val startMsg = JsonObject().apply {
+            addProperty("type", "execution_status")
+            val p = JsonObject().apply {
+                addProperty("status", "started")
+                addProperty("title", runTitle)
+                addProperty("time", System.currentTimeMillis())
+            }
+            add("payload", p)
+        }
+        broadcastAndCache(startMsg)
+
+        handler.addProcessListener(object : ProcessListener {
+            override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                val text = event.text ?: return
+                val isStderr = ProcessOutputTypes.STDERR == outputType
+                val isSystem = ProcessOutputTypes.SYSTEM == outputType
+                val outMsg = JsonObject().apply {
+                    addProperty("type", "execution_output")
+                    val p = JsonObject().apply {
+                        addProperty("text", text)
+                        addProperty("isStderr", isStderr)
+                        addProperty("isSystem", isSystem)
+                    }
+                    add("payload", p)
+                }
+                broadcastAndCache(outMsg)
+            }
+
+            override fun processTerminated(event: ProcessEvent) {
+                attachedHandlers.remove(handler)
+                val endMsg = JsonObject().apply {
+                    addProperty("type", "execution_status")
+                    val p = JsonObject().apply {
+                        addProperty("status", "terminated")
+                        addProperty("exitCode", event.exitCode)
+                    }
+                    add("payload", p)
+                }
+                broadcastAndCache(endMsg)
+            }
+
+            override fun startNotified(event: ProcessEvent) {}
+            override fun processWillTerminate(event: ProcessEvent, willBeDestroyed: Boolean) {}
+        })
+    }
+
+    private fun broadcastAndCache(msg: JsonObject) {
+        if (executionLogCache.size > 200) {
+            executionLogCache.removeAt(0)
+        }
+        executionLogCache.add(msg)
+        broadcast(gson.toJson(msg))
     }
 
     /**

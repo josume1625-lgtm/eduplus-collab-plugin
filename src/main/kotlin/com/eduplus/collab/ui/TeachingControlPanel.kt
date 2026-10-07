@@ -61,9 +61,9 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
         toolTipText = "一键复制局域网分享链接供学生加入"
     }
 
-    // 教学模式开关组件
-    private val exclusiveModeRadio = JRadioButton("老师独占讲解 (强制只读)", true)
-    private val freeCollabRadio = JRadioButton("自由互动协同 (双向可写)", false)
+    // 教学模式开关组件 (默认自由互动协同模式)
+    private val exclusiveModeRadio = JRadioButton("老师独占讲解 (强制只读)", false)
+    private val freeCollabRadio = JRadioButton("自由互动协同 (双向可写)", true)
     private val modeButtonGroup = ButtonGroup()
     private val modeHintLabel = JBLabel("").apply {
         font = JBFont.small()

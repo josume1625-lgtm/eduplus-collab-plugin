@@ -72,7 +72,8 @@
     refreshTreeBtn: document.getElementById('refreshTreeBtn'),
     editorTabs: document.getElementById('editor-tabs'),
 
-    // 运行结果控制台 DOM
+    // 运行控制台与申请运行 DOM
+    btnStudentRun: document.getElementById('btnStudentRun'),
     toggleTerminalBtn: document.getElementById('toggleTerminalBtn'),
     terminalPanel: document.getElementById('terminal-panel'),
     runStatusBadge: document.getElementById('runStatusBadge'),
@@ -278,6 +279,64 @@
     DOM.clearTerminalBtn.addEventListener('click', function () {
       DOM.terminalContent.innerHTML = '<div class="terminal-line terminal-system">控制台输出已清空。</div>';
     });
+
+    // 学生端申请运行当前代码
+    if (DOM.btnStudentRun) {
+      DOM.btnStudentRun.addEventListener('click', function () {
+        if (!State.ws || State.ws.readyState !== WebSocket.OPEN) {
+          alert('协同未连接，无法发起运行申请');
+          return;
+        }
+
+        DOM.btnStudentRun.disabled = true;
+        DOM.btnStudentRun.textContent = '⏳ 等待老师确认...';
+
+        const reqPath = State.currentFilePath || '当前文件';
+        WSClient.send({
+          type: 'student_request_run',
+          payload: {
+            studentId: window.CLIENT_META.studentId,
+            studentName: window.CLIENT_META.studentName,
+            filePath: reqPath
+          }
+        });
+
+        const timeStr = new Date().toLocaleTimeString();
+        const line = document.createElement('div');
+        line.className = 'terminal-line terminal-system';
+        line.textContent = `[${timeStr}] === ⏳ 已向老师申请运行代码【${reqPath}】，等待老师确认中... ===`;
+        DOM.terminalContent.appendChild(line);
+        DOM.terminalContent.scrollTop = DOM.terminalContent.scrollHeight;
+
+        // 15 秒超时自动复位
+        setTimeout(function () {
+          if (DOM.btnStudentRun.disabled) {
+            DOM.btnStudentRun.disabled = false;
+            DOM.btnStudentRun.textContent = '▶ 申请运行代码';
+          }
+        }, 15000);
+      });
+    }
+  }
+
+  function handleStudentRunResponse(payload) {
+    if (!payload) return;
+    if (DOM.btnStudentRun) {
+      DOM.btnStudentRun.disabled = false;
+      DOM.btnStudentRun.textContent = '▶ 申请运行代码';
+    }
+
+    const timeStr = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    if (payload.approved) {
+      line.className = 'terminal-line terminal-system';
+      line.textContent = `[${timeStr}] === ✅ 老师已批准运行申请，程序正在启动执行... ===`;
+    } else {
+      line.className = 'terminal-line terminal-stderr';
+      line.textContent = `[${timeStr}] === ❌ 老师拒绝了此次运行申请。 ===`;
+    }
+    DOM.terminalContent.appendChild(line);
+    DOM.terminalContent.scrollTop = DOM.terminalContent.scrollHeight;
   }
 
   // ==========================================
@@ -669,6 +728,9 @@
           break;
         case 'execution_output':
           handleExecutionOutput(msg.payload);
+          break;
+        case 'student_run_response':
+          handleStudentRunResponse(msg.payload);
           break;
         case 'heartbeat':
           if (State.lastPingTimestamp > 0) {
