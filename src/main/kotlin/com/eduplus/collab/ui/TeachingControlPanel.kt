@@ -35,42 +35,42 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
     private val statusTextLabel = JBLabel(ConnectionStatus.IDLE.label).apply {
         font = JBFont.medium().asBold()
     }
-    private val toggleServiceButton = JButton("启动协同服务").apply {
+    private val toggleServiceButton = JButton("Start Collaboration").apply {
         background = JBColor(0x388E3C, 0x2E7D32)
         isFocusPainted = false
     }
 
-    // 本地回环地址
+    // Local URL
     private val localUrlField = JBTextField().apply {
         isEditable = false
-        emptyText.text = "服务未启动"
+        emptyText.text = "Service not started"
     }
-    private val copyLocalUrlButton = JButton("复制").apply {
-        toolTipText = "一键复制本机调试链接"
+    private val copyLocalUrlButton = JButton("Copy").apply {
+        toolTipText = "Copy local testing URL"
     }
-    private val openBrowserButton = JButton("浏览器打开").apply {
-        toolTipText = "在默认浏览器中打开学生端页面进行同屏验证"
+    private val openBrowserButton = JButton("Open in Browser").apply {
+        toolTipText = "Open student page in default browser"
     }
 
-    // 局域网分享地址 (同 Wi-Fi 学生设备访问)
+    // LAN URL
     private val lanUrlField = JBTextField().apply {
         isEditable = false
-        emptyText.text = "服务未启动"
+        emptyText.text = "Service not started"
     }
-    private val copyLanUrlButton = JButton("复制局域网").apply {
-        toolTipText = "一键复制局域网分享链接供学生加入"
+    private val copyLanUrlButton = JButton("Copy LAN URL").apply {
+        toolTipText = "Copy LAN share URL for students"
     }
 
-    // 教学模式开关组件 (默认自由互动协同模式)
-    private val exclusiveModeRadio = JRadioButton("老师独占讲解 (强制只读)", false)
-    private val freeCollabRadio = JRadioButton("自由互动协同 (双向可写)", true)
+    // Teaching Mode
+    private val exclusiveModeRadio = JRadioButton("Teacher Exclusive (Read-only)", false)
+    private val freeCollabRadio = JRadioButton("Interactive Collab (Bi-directional)", true)
     private val modeButtonGroup = ButtonGroup()
     private val modeHintLabel = JBLabel("").apply {
         font = JBFont.small()
         foreground = JBColor(0x757575, 0x9E9E9E)
     }
 
-    // 在线成员与动态列表
+    // Online peer list
     private val peerListModel = DefaultListModel<String>()
     private val peerJList = JList(peerListModel).apply {
         selectionMode = ListSelectionModel.SINGLE_SELECTION
@@ -154,15 +154,15 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
             maximumSize = Dimension(Short.MAX_VALUE.toInt(), 150)
         }
 
-        val title = JBLabel("课堂接入访问地址 (本地 / 局域网)").apply {
+        val title = JBLabel("Classroom Access URL (Local / LAN)").apply {
             font = JBFont.regular().asBold()
             alignmentX = Component.LEFT_ALIGNMENT
         }
         panel.add(title)
         panel.add(Box.createVerticalStrut(6))
 
-        // 本机地址行
-        val localLabel = JBLabel("💻 本机地址:").apply {
+        // Local row
+        val localLabel = JBLabel("💻 Local URL:").apply {
             font = JBFont.small()
             foreground = JBColor(0x666666, 0xAAAAAA)
             alignmentX = Component.LEFT_ALIGNMENT
@@ -184,8 +184,8 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
         panel.add(localRow)
         panel.add(Box.createVerticalStrut(6))
 
-        // 局域网分享行
-        val lanLabel = JBLabel("🌐 局域网分享 (同 Wi-Fi 学生):").apply {
+        // LAN share row
+        val lanLabel = JBLabel("🌐 LAN Share URL (Same Wi-Fi):").apply {
             font = JBFont.small()
             foreground = JBColor(0x666666, 0xAAAAAA)
             alignmentX = Component.LEFT_ALIGNMENT
@@ -220,7 +220,7 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
             maximumSize = Dimension(Short.MAX_VALUE.toInt(), 125)
         }
 
-        val title = JBLabel("课堂协同控制模式").apply {
+        val title = JBLabel("Teaching Control Mode").apply {
             font = JBFont.regular().asBold()
             alignmentX = Component.LEFT_ALIGNMENT
         }
@@ -258,7 +258,7 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
             alignmentX = Component.LEFT_ALIGNMENT
         }
 
-        val title = JBLabel("在线课堂成员列表 (0)").apply {
+        val title = JBLabel("Online Students (0)").apply {
             font = JBFont.regular().asBold()
         }
         panel.add(title, BorderLayout.NORTH)
@@ -273,59 +273,59 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
     }
 
     private fun bindActions() {
-        // 启停协同服务
+        // Toggle collaboration service
         toggleServiceButton.addActionListener {
             if (sessionService.status == ConnectionStatus.IDLE) {
                 val started = sessionService.startSession()
                 if (started) {
                     localUrlField.text = sessionService.accessUrl
                     lanUrlField.text = sessionService.lanAccessUrl
-                    toggleServiceButton.text = "停止协同服务"
+                    toggleServiceButton.text = "Stop Collaboration"
                     toggleServiceButton.background = JBColor(0xD32F2F, 0xC62828)
                 } else {
-                    Messages.showErrorDialog(project, "协同服务启动失败，请检查端口是否被占用。", "错误")
+                    Messages.showErrorDialog(project, "Failed to start collaboration service. Please check if the port is in use.", "Error")
                 }
             } else {
                 sessionService.stopSession()
                 localUrlField.text = ""
                 lanUrlField.text = ""
-                toggleServiceButton.text = "启动协同服务"
+                toggleServiceButton.text = "Start Collaboration"
                 toggleServiceButton.background = JBColor(0x388E3C, 0x2E7D32)
             }
         }
 
-        // 复制本机链接
+        // Copy local URL
         copyLocalUrlButton.addActionListener {
             val url = sessionService.accessUrl
             if (sessionService.status != ConnectionStatus.IDLE && url.isNotBlank()) {
                 CopyPasteManager.getInstance().setContents(StringSelection(url))
-                Messages.showInfoMessage(project, "本机调试链接已复制到剪贴板！\n$url", "EduPlus 协同分享")
+                Messages.showInfoMessage(project, "Local testing URL copied to clipboard!\n$url", "EduPlus Collab")
             } else {
-                Messages.showWarningDialog(project, "协同服务未启动，暂无可复制的接入链接。", "提示")
+                Messages.showWarningDialog(project, "Collaboration service not started, no URL to copy.", "Hint")
             }
         }
 
-        // 复制局域网分享链接
+        // Copy LAN URL
         copyLanUrlButton.addActionListener {
             val url = sessionService.lanAccessUrl
             if (sessionService.status != ConnectionStatus.IDLE && url.isNotBlank()) {
                 CopyPasteManager.getInstance().setContents(StringSelection(url))
-                Messages.showInfoMessage(project, "局域网分享链接已复制到剪贴板！可发给同一 Wi-Fi 下的学生：\n$url", "EduPlus 局域网分享")
+                Messages.showInfoMessage(project, "LAN share URL copied to clipboard! Send to students on the same Wi-Fi:\n$url", "EduPlus LAN Share")
             } else {
-                Messages.showWarningDialog(project, "协同服务未启动，暂无可复制的接入链接。", "提示")
+                Messages.showWarningDialog(project, "Collaboration service not started, no URL to copy.", "Hint")
             }
         }
 
-        // 浏览器打开
+        // Open in browser
         openBrowserButton.addActionListener {
             if (sessionService.status != ConnectionStatus.IDLE) {
                 BrowserUtil.browse(sessionService.accessUrl)
             } else {
-                Messages.showWarningDialog(project, "协同服务未启动，请先点击启动服务。", "提示")
+                Messages.showWarningDialog(project, "Collaboration service not started. Please start the service first.", "Hint")
             }
         }
 
-        // 教学模式变更
+        // Teaching mode change
         exclusiveModeRadio.addActionListener {
             sessionService.setTeachingMode(TeachingMode.TEACHER_EXCLUSIVE)
             updateModeHint(TeachingMode.TEACHER_EXCLUSIVE)
@@ -344,12 +344,12 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
                     statusTextLabel.text = newStatus.label
                     when (newStatus) {
                         ConnectionStatus.IDLE -> {
-                            toggleServiceButton.text = "启动协同服务"
+                            toggleServiceButton.text = "Start Collaboration"
                             localUrlField.text = ""
                             lanUrlField.text = ""
                         }
                         ConnectionStatus.WAITING, ConnectionStatus.CONNECTED, ConnectionStatus.NETWORK_SHAKING -> {
-                            toggleServiceButton.text = "停止协同服务"
+                            toggleServiceButton.text = "Stop Collaboration"
                             localUrlField.text = sessionService.accessUrl
                             lanUrlField.text = sessionService.lanAccessUrl
                         }
@@ -369,12 +369,12 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
                 SwingUtilities.invokeLater {
                     peerListModel.clear()
                     if (peers.isEmpty()) {
-                        peerListModel.addElement("暂无学生接入")
+                        peerListModel.addElement("No students connected")
                     } else {
                         peers.forEach { peer ->
                             val latencyTag = if (peer.latencyMs > 0) "[${peer.latencyMs}ms]" else ""
-                            val cursorTag = peer.cursor?.let { "行:${it.line + 1},列:${it.column + 1}" } ?: "未聚焦"
-                            peerListModel.addElement("${peer.name} (${peer.role.displayName}) $latencyTag - 光标: $cursorTag")
+                            val cursorTag = peer.cursor?.let { "Ln:${it.line + 1},Col:${it.column + 1}" } ?: "Unfocused"
+                            peerListModel.addElement("${peer.name} (${peer.role.displayName}) $latencyTag - Caret: $cursorTag")
                         }
                     }
                 }
@@ -383,6 +383,6 @@ class TeachingControlPanel(private val project: Project) : JBPanel<TeachingContr
     }
 
     private fun updateModeHint(mode: TeachingMode) {
-        modeHintLabel.text = "说明: ${mode.description}"
+        modeHintLabel.text = "Mode: ${mode.description}"
     }
 }

@@ -6,26 +6,26 @@ import java.awt.Color
  * 协同服务端与客户端连接状态枚举
  */
 enum class ConnectionStatus(val label: String, val color: Color) {
-    IDLE("未启动", Color(0x8C, 0x8C, 0x8C)),                 // 灰灯：服务停止
-    WAITING("等待学生加入...", Color(0xE5, 0xA8, 0x00)),        // 黄灯：服务已起，暂无客户端
-    CONNECTED("教学协同进行中", Color(0x38, 0x8E, 0x3C)),      // 绿灯：至少一名学生连接协同中
-    NETWORK_SHAKING("网络抖动/延迟高", Color(0xD3, 0x2F, 0x2F)) // 闪烁红灯：心跳超时或重传抖动
+    IDLE("Stopped", Color(0x8C, 0x8C, 0x8C)),                 // Gray: Service stopped
+    WAITING("Waiting for students...", Color(0xE5, 0xA8, 0x00)),        // Yellow: Waiting for clients
+    CONNECTED("Collab Active", Color(0x38, 0x8E, 0x3C)),      // Green: Connected and active
+    NETWORK_SHAKING("Network Jitter / Lag", Color(0xD3, 0x2F, 0x2F)) // Red: Latency/Jitter
 }
 
 /**
  * 教学控制模式枚举
  */
 enum class TeachingMode(val displayName: String, val description: String) {
-    TEACHER_EXCLUSIVE("老师独占讲解", "学生端编辑器只读，无法修改代码，避免误触与打断"),
-    FREE_COLLABORATION("自由互动协同", "师生均拥有实时编辑权限，代码并发输入并同步")
+    TEACHER_EXCLUSIVE("Teacher Exclusive (Read-only)", "Student editor is read-only to avoid interruptions"),
+    FREE_COLLABORATION("Interactive Collab (Bi-directional)", "Teacher and students can edit simultaneously")
 }
 
 /**
  * 角色身份定义
  */
 enum class UserRole(val displayName: String, val badgeColor: Color) {
-    TEACHER("老师", Color(0x29, 0x79, 0xFF)), // 经典深蓝
-    STUDENT("学生", Color(0xFF, 0x91, 0x00))  // 活力暖橙
+    TEACHER("Teacher", Color(0x29, 0x79, 0xFF)), // Deep Blue
+    STUDENT("Student", Color(0xFF, 0x91, 0x00))  // Bright Orange
 }
 
 /**

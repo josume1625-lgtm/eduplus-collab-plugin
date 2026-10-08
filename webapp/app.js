@@ -1,14 +1,14 @@
 /**
  * ============================================================================
- * EduPlus 教学协同编辑器 - 学生端核心引擎 (app.js)
- * 模块职责：
- * 1. 本地 Monaco Editor 环境初始化与个性化橙色主题
- * 2. 项目工作区目录树渲染与点击切换文件 (Directory Tree)
- * 3. 多页签栏渲染与实时联动切换 (Multi-tabs)
- * 4. 老师端程序运行输出实时捕获展示控制台 (Execution Output Console)
- * 5. 老师高保真蓝色双光标/选区渲染引擎 (deltaDecorations API + 视口平滑跟随)
- * 6. 学生光标 30ms 节流上报与增量编辑监听 (带 isApplyingRemoteUpdate 门闩锁)
- * 7. 本地局域网自适应 WebSocket 指数退避重连状态机
+ * EduPlus Teaching Studio - Student Core Engine (app.js)
+ * Module Responsibilities:
+ * 1. Local Monaco Editor environment initialization with personalized orange theme
+ * 2. Project workspace directory tree rendering & file switching (Directory Tree)
+ * 3. Multi-tab bar rendering and synchronization (Multi-tabs)
+ * 4. Real-time console output capture and streaming (Execution Output Console)
+ * 5. High-fidelity teacher blue cursor & selection rendering (CSS overlay + smooth viewport follow)
+ * 6. Student cursor 30ms throttled reporting & incremental delta editing (with RemoteApplyGuard)
+ * 7. Local/LAN WebSocket exponential backoff reconnection state machine
  * ============================================================================
  */
 
@@ -16,7 +16,7 @@
   'use strict';
 
   // ==========================================
-  // 1. 全局配置与状态常量
+  // 1. Global Configurations & Constants
   // ==========================================
   const CONFIG = {
     wsUrl: getWsUrl(),
@@ -24,10 +24,10 @@
     reconnectIntervals: [1000, 2000, 4000, 8000, 10000],
     heartbeatIntervalMs: 5000,
     initialLanguage: 'java',
-    initialCode: `// 欢迎进入 EduPlus 实时教学协同工作台\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("EduPlus 协同课堂已连接，等待老师代码同步...");\n    }\n}\n`
+    initialCode: `// Welcome to EduPlus Real-time Teaching Studio\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("EduPlus studio connected. Waiting for teacher code broadcast...");\n    }\n}\n`
   };
 
-  /** 从 URL 参数提取房间与用户信息，自动计算 WebSocket 端口 (HTTP 端口 + 1) */
+  /** Extract room & student info from URL parameters, auto-calculate WebSocket port */
   function getWsUrl() {
     const params = new URLSearchParams(window.location.search);
     const hostname = window.location.hostname || '127.0.0.1';
@@ -35,7 +35,7 @@
     const wsPort = params.get('wsPort') || (httpPort + 1);
     const roomId = params.get('roomId') || 'ROOM_101';
     const studentId = params.get('studentId') || ('stu_' + Math.floor(Math.random() * 9000 + 1000));
-    const studentName = params.get('name') || ('学生_' + studentId.slice(-4));
+    const studentName = params.get('name') || ('Student_' + studentId.slice(-4));
 
     window.CLIENT_META = { roomId, studentId, studentName };
 
@@ -44,7 +44,7 @@
   }
 
   // ==========================================
-  // 2. DOM 元素缓存
+  // 2. DOM Elements Cache
   // ==========================================
   const DOM = {
     roomBadge: document.getElementById('roomBadge'),
@@ -65,14 +65,14 @@
     syntaxInfo: document.getElementById('syntaxInfo'),
     teacherPresenceBadge: document.getElementById('teacherPresenceBadge'),
 
-    // 目录树与页签 DOM
+    // Tree & Tabs DOM
     toggleSidebarBtn: document.getElementById('toggleSidebarBtn'),
     fileTreeSidebar: document.getElementById('file-tree-sidebar'),
     fileTreeContainer: document.getElementById('file-tree-container'),
     refreshTreeBtn: document.getElementById('refreshTreeBtn'),
     editorTabs: document.getElementById('editor-tabs'),
 
-    // 运行控制台与申请运行 DOM
+    // Terminal & Run DOM
     btnStudentRun: document.getElementById('btnStudentRun'),
     toggleTerminalBtn: document.getElementById('toggleTerminalBtn'),
     terminalPanel: document.getElementById('terminal-panel'),
@@ -83,19 +83,19 @@
   };
 
   // ==========================================
-  // 3. 核心协同运行时状态
+  // 3. Core Collaborative State
   // ==========================================
   const State = {
-    editor: null,                       // Monaco Editor 实例
-    isApplyingRemoteUpdate: false,      // 防循环同步门闩标志
-    teacherDecorations: [],             // 老师光标高亮句柄
-    isReadOnlyLocked: false,            // 老师只读锁
-    followTeacherView: true,            // 跟随老师视口滚动
-    currentFilePath: '',               // 当前活动文件路径
-    tabs: [],                           // 当前打开的页签列表
-    projectTree: [],                    // 项目目录树数据
+    editor: null,                       // Monaco Editor instance
+    isApplyingRemoteUpdate: false,      // Anti-loop recursion latch
+    teacherDecorations: [],             // Teacher cursor decoration IDs
+    isReadOnlyLocked: false,            // Read-only lock
+    followTeacherView: true,            // Auto-follow teacher viewport
+    currentFilePath: '',               // Active file relative path
+    tabs: [],                           // Open tabs list
+    projectTree: [],                    // Project directory tree
 
-    // WebSocket 状态机
+    // WebSocket state machine
     ws: null,
     connectionState: 'DISCONNECTED',
     reconnectAttempt: 0,
@@ -105,7 +105,7 @@
   };
 
   // ==========================================
-  // 4. Monaco Editor 本地化集成
+  // 4. Monaco Editor Localization Integration
   // ==========================================
   function initMonacoEditor() {
     window.MonacoEnvironment = {
@@ -118,7 +118,7 @@
       }
     };
 
-    // 1. 定义学生个性化橙色主题
+    // 1. Define student orange dark theme
     monaco.editor.defineTheme('student-orange-dark', {
       base: 'vs-dark',
       inherit: true,
@@ -139,7 +139,7 @@
       }
     });
 
-    // 2. 创建 Monaco 实例
+    // 2. Create Monaco editor instance
     State.editor = monaco.editor.create(document.getElementById('monaco-host'), {
       value: CONFIG.initialCode,
       language: CONFIG.initialLanguage,
@@ -157,15 +157,15 @@
       cursorSmoothCaretAnimation: 'on'
     });
 
-    // 3. 绑定编辑器事件监听
+    // 3. Bind editor listeners
     bindMonacoEvents();
 
-    // 4. 连接协同 WebSocket 管道
+    // 4. Connect WebSocket pipeline
     WSClient.connect();
   }
 
   // ==========================================
-  // 5. 编辑器事件绑定与学生操作节流上报
+  // 5. Editor Events & Student Throttle Reporting
   // ==========================================
   function bindMonacoEvents() {
     const editor = State.editor;
@@ -173,7 +173,7 @@
     let cursorThrottleTimer = null;
     let pendingCursorEvent = null;
 
-    // 监听光标移动与选区变动
+    // Listen to cursor position & selection changes
     editor.onDidChangeCursorPosition(function (e) {
       pendingCursorEvent = e;
       if (!cursorThrottleTimer) {
@@ -193,6 +193,7 @@
       if (!State.ws || State.ws.readyState !== WebSocket.OPEN) return;
       const pos = editor.getPosition();
       const sel = editor.getSelection();
+      if (!pos) return;
 
       const payload = {
         studentId: window.CLIENT_META.studentId,
@@ -212,7 +213,7 @@
       });
     }
 
-    // 监听学生键盘编辑
+    // Listen to student keyboard edits
     editor.onDidChangeModelContent(function (e) {
       if (State.isApplyingRemoteUpdate) return;
       if (State.isReadOnlyLocked) return;
@@ -221,6 +222,7 @@
         WSClient.send({
           type: 'code_delta',
           payload: {
+            filePath: State.currentFilePath,
             rangeOffset: change.rangeOffset,
             oldLength: change.rangeLength,
             text: change.text
@@ -231,67 +233,67 @@
   }
 
   // ==========================================
-  // 6. UI 交互组件事件绑定 (目录树、页签、运行控制台)
+  // 6. UI Interaction Component Bindings
   // ==========================================
   function bindUIEvents() {
-    // 课堂信息展示
+    // Classroom info
     if (window.CLIENT_META) {
-      DOM.roomBadge.textContent = '课堂: ' + window.CLIENT_META.roomId;
-      DOM.userBadge.textContent = '学生: ' + window.CLIENT_META.studentName;
+      DOM.roomBadge.textContent = 'Room: ' + window.CLIENT_META.roomId;
+      DOM.userBadge.textContent = 'Student: ' + window.CLIENT_META.studentName;
     }
 
-    // 跟随老师视口开关
+    // Follow teacher viewport toggle
     DOM.followTeacherCheckbox.addEventListener('change', function (e) {
       State.followTeacherView = e.target.checked;
     });
 
-    // 手动重连按钮
+    // Reconnect button
     DOM.btnReconnect.addEventListener('click', function () {
       WSClient.connect();
     });
 
-    // 侧边栏折叠切换
+    // Sidebar collapse toggle
     DOM.toggleSidebarBtn.addEventListener('click', function () {
       DOM.fileTreeSidebar.classList.toggle('collapsed');
       setTimeout(() => State.editor && State.editor.layout(), 220);
     });
 
-    // 刷新目录树按钮
+    // Refresh tree button
     DOM.refreshTreeBtn.addEventListener('click', function () {
-      DOM.fileTreeContainer.innerHTML = '<div class="tree-loading">正在刷新目录...</div>';
+      DOM.fileTreeContainer.innerHTML = '<div class="tree-loading">Refreshing project tree...</div>';
       WSClient.send({ type: 'refresh_tree_request' });
     });
 
-    // 运行结果面板切换按钮
+    // Toggle terminal button
     DOM.toggleTerminalBtn.addEventListener('click', function () {
       DOM.terminalPanel.classList.toggle('hidden');
       setTimeout(() => State.editor && State.editor.layout(), 220);
     });
 
-    // 折叠运行控制台
+    // Collapse terminal button
     DOM.collapseTerminalBtn.addEventListener('click', function () {
       const isCol = DOM.terminalPanel.classList.toggle('collapsed');
-      DOM.collapseTerminalBtn.textContent = isCol ? '展开' : '折叠';
+      DOM.collapseTerminalBtn.textContent = isCol ? 'Expand' : 'Collapse';
       setTimeout(() => State.editor && State.editor.layout(), 220);
     });
 
-    // 清屏运行输出
+    // Clear terminal output
     DOM.clearTerminalBtn.addEventListener('click', function () {
-      DOM.terminalContent.innerHTML = '<div class="terminal-line terminal-system">控制台输出已清空。</div>';
+      DOM.terminalContent.innerHTML = '<div class="terminal-line terminal-system">Console output cleared.</div>';
     });
 
-    // 学生端申请运行当前代码
+    // Student request to run active file
     if (DOM.btnStudentRun) {
       DOM.btnStudentRun.addEventListener('click', function () {
         if (!State.ws || State.ws.readyState !== WebSocket.OPEN) {
-          alert('协同未连接，无法发起运行申请');
+          alert('Collaboration not connected, cannot request run.');
           return;
         }
 
         DOM.btnStudentRun.disabled = true;
-        DOM.btnStudentRun.textContent = '⏳ 等待老师确认...';
+        DOM.btnStudentRun.textContent = '⏳ Waiting for Approval...';
 
-        const reqPath = State.currentFilePath || '当前文件';
+        const reqPath = State.currentFilePath || 'Active File';
         WSClient.send({
           type: 'student_request_run',
           payload: {
@@ -304,15 +306,15 @@
         const timeStr = new Date().toLocaleTimeString();
         const line = document.createElement('div');
         line.className = 'terminal-line terminal-system';
-        line.textContent = `[${timeStr}] === ⏳ 已向老师申请运行代码【${reqPath}】，等待老师确认中... ===`;
+        line.textContent = `[${timeStr}] === ⏳ Requested to run [${reqPath}], waiting for teacher approval... ===`;
         DOM.terminalContent.appendChild(line);
         DOM.terminalContent.scrollTop = DOM.terminalContent.scrollHeight;
 
-        // 15 秒超时自动复位
+        // Auto-reset after 15 seconds
         setTimeout(function () {
           if (DOM.btnStudentRun.disabled) {
             DOM.btnStudentRun.disabled = false;
-            DOM.btnStudentRun.textContent = '▶ 申请运行代码';
+            DOM.btnStudentRun.textContent = '▶ Run Code';
           }
         }, 15000);
       });
@@ -323,24 +325,24 @@
     if (!payload) return;
     if (DOM.btnStudentRun) {
       DOM.btnStudentRun.disabled = false;
-      DOM.btnStudentRun.textContent = '▶ 申请运行代码';
+      DOM.btnStudentRun.textContent = '▶ Run Code';
     }
 
     const timeStr = new Date().toLocaleTimeString();
     const line = document.createElement('div');
     if (payload.approved) {
       line.className = 'terminal-line terminal-system';
-      line.textContent = `[${timeStr}] === ✅ 老师已批准运行申请，程序正在启动执行... ===`;
+      line.textContent = `[${timeStr}] === ✅ Teacher approved run request. Launching execution... ===`;
     } else {
       line.className = 'terminal-line terminal-stderr';
-      line.textContent = `[${timeStr}] === ❌ 老师拒绝了此次运行申请。 ===`;
+      line.textContent = `[${timeStr}] === ❌ Teacher rejected the run request. ===`;
     }
     DOM.terminalContent.appendChild(line);
     DOM.terminalContent.scrollTop = DOM.terminalContent.scrollHeight;
   }
 
   // ==========================================
-  // 7. 目录树渲染引擎 (Directory Tree)
+  // 7. Directory Tree Engine (Directory Tree)
   // ==========================================
   function renderDirectoryTree(treeData, projectName) {
     State.projectTree = treeData;
@@ -348,7 +350,7 @@
     container.innerHTML = '';
 
     if (!treeData || treeData.length === 0) {
-      container.innerHTML = '<div class="tree-loading">工作区为空或无文件</div>';
+      container.innerHTML = '<div class="tree-loading">Workspace is empty or has no files</div>';
       return;
     }
 
@@ -405,6 +407,7 @@
   }
 
   function getFileIcon(fileName) {
+    if (!fileName) return '📄 ';
     const ext = fileName.split('.').pop().toLowerCase();
     switch (ext) {
       case 'java': return '☕ ';
@@ -422,7 +425,6 @@
 
   function openFile(filePath) {
     if (!filePath) return;
-    // 请求服务端读取对应文件内容
     WSClient.send({
       type: 'open_file_request',
       payload: { path: filePath }
@@ -430,7 +432,7 @@
   }
 
   // ==========================================
-  // 8. 多页签栏渲染与联动 (Multi Tabs)
+  // 8. Multi-tab Bar Rendering (Multi Tabs)
   // ==========================================
   function renderTabs(tabs, activePath) {
     State.tabs = tabs || [];
@@ -442,25 +444,27 @@
     if (!tabs || tabs.length === 0) {
       const single = document.createElement('div');
       single.className = 'tab-item active';
-      single.innerHTML = `<span class="tab-icon">📄</span><span class="tab-name">${State.currentFilePath || 'Active.java'}</span>`;
+      const fName = State.currentFilePath || 'Active.java';
+      single.innerHTML = `<span class="tab-icon">📄</span><span class="tab-name">${fName}</span>`;
       container.appendChild(single);
       return;
     }
 
     tabs.forEach(tab => {
       const tabEl = document.createElement('div');
-      tabEl.className = 'tab-item ' + (tab.active || tab.path === State.currentFilePath ? 'active' : '');
-      tabEl.dataset.path = tab.path;
-      tabEl.innerHTML = `<span class="tab-icon">${getFileIcon(tab.name)}</span><span class="tab-name">${tab.name}</span>`;
+      const tabName = tab.name || (tab.path ? tab.path.split('/').pop() : 'file');
+      const isAct = (tab.active || tab.path === State.currentFilePath);
+      tabEl.className = 'tab-item ' + (isAct ? 'active' : '');
+      tabEl.dataset.path = tab.path || '';
+      tabEl.innerHTML = `<span class="tab-icon">${getFileIcon(tabName)}</span><span class="tab-name">${tabName}</span>`;
 
       tabEl.addEventListener('click', function () {
-        openFile(tab.path);
+        if (tab.path) openFile(tab.path);
       });
 
       container.appendChild(tabEl);
     });
 
-    // 同步更新左侧树的高亮
     updateTreeActiveFile(State.currentFilePath);
   }
 
@@ -476,7 +480,7 @@
   }
 
   // ==========================================
-  // 9. 运行结果控制台输出同步 (Execution Output)
+  // 9. Execution Output Synchronization
   // ==========================================
   function handleExecutionStatus(payload) {
     if (!payload) return;
@@ -484,27 +488,26 @@
     const terminal = DOM.terminalContent;
 
     if (status === 'started') {
-      DOM.runStatusBadge.textContent = '🚀 运行中: ' + (payload.title || 'App');
+      DOM.runStatusBadge.textContent = '🚀 Running: ' + (payload.title || 'App');
       DOM.runStatusBadge.className = 'badge-run-status running';
 
       const line = document.createElement('div');
       line.className = 'terminal-line terminal-system';
       const timeStr = new Date().toLocaleTimeString();
-      line.textContent = `[${timeStr}] === 🚀 开始运行: ${payload.title || '程序'} ===`;
+      line.textContent = `[${timeStr}] === 🚀 Started: ${payload.title || 'Program'} ===`;
       terminal.appendChild(line);
 
-      // 展开终端面板
       DOM.terminalPanel.classList.remove('collapsed', 'hidden');
       setTimeout(() => State.editor && State.editor.layout(), 100);
     } else if (status === 'terminated') {
       const exitCode = payload.exitCode !== undefined ? payload.exitCode : 0;
-      DOM.runStatusBadge.textContent = `✅ 退出 (代码: ${exitCode})`;
+      DOM.runStatusBadge.textContent = `✅ Exit (Code: ${exitCode})`;
       DOM.runStatusBadge.className = 'badge-run-status ' + (exitCode === 0 ? '' : 'error');
 
       const line = document.createElement('div');
       line.className = 'terminal-line terminal-system';
       const timeStr = new Date().toLocaleTimeString();
-      line.textContent = `[${timeStr}] === 进程结束 (exit code: ${exitCode}) ===\n`;
+      line.textContent = `[${timeStr}] === Process finished with exit code ${exitCode} ===\n`;
       terminal.appendChild(line);
     }
     terminal.scrollTop = terminal.scrollHeight;
@@ -529,38 +532,49 @@
   }
 
   // ==========================================
-  // 10. 老师双光标/选区叠加渲染 (deltaDecorations)
+  // 10. Teacher Dual-Cursor Overlay Rendering
+  //     (Pure CSS overlay, zero buffer pollution, student cursor protected)
   // ==========================================
   function renderTeacherCursor(payload) {
     if (!State.editor || !payload) return;
-    const line = payload.line;
-    const ch = payload.ch;
-    const teacherName = payload.teacherName || '老师';
+    const model = State.editor.getModel();
+    if (!model) return;
+
+    // Ignore cursor if associated with a different file
+    if (payload.filePath && State.currentFilePath && payload.filePath !== State.currentFilePath) {
+      return;
+    }
+
+    const maxLine = model.getLineCount();
+    const safeLine = Math.max(1, Math.min(payload.line || 1, maxLine));
+    const maxCol = model.getLineMaxColumn(safeLine);
+    const safeCh = Math.max(1, Math.min(payload.ch || 1, maxCol));
+    const teacherName = payload.teacherName || 'Teacher';
+
+    // Save student active position before updating decorations
+    const hasFocus = State.editor.hasTextFocus();
+    const currentPos = State.editor.getPosition();
+    const currentSel = State.editor.getSelection();
 
     const newDecorations = [];
 
-    // 1. 蓝色高亮光标垂直条 + 姓名气泡标签
+    // 1. Blue highlight vertical cursor bar (Floating badge styled via CSS ::before)
     newDecorations.push({
-      range: new monaco.Range(line, ch, line, ch),
+      range: new monaco.Range(safeLine, safeCh, safeLine, safeCh),
       options: {
         className: 'teacher-cursor-line',
-        hoverMessage: { value: `**${teacherName}** 当前光标位置` },
-        after: {
-          content: `👨‍🏫 ${teacherName}`,
-          inlineClassName: 'teacher-cursor-badge'
-        }
+        hoverMessage: { value: `**Teacher (${teacherName})**` }
       }
     });
 
-    // 2. 老师选区半透明蓝色高亮
+    // 2. Teacher selection highlight
     if (payload.selectionStart && payload.selectionEnd) {
+      const sLine = Math.max(1, Math.min(payload.selectionStart.line, maxLine));
+      const sCol = Math.max(1, Math.min(payload.selectionStart.ch, model.getLineMaxColumn(sLine)));
+      const eLine = Math.max(1, Math.min(payload.selectionEnd.line, maxLine));
+      const eCol = Math.max(1, Math.min(payload.selectionEnd.ch, model.getLineMaxColumn(eLine)));
       newDecorations.push({
-        range: new monaco.Range(
-          payload.selectionStart.line,
-          payload.selectionStart.ch,
-          payload.selectionEnd.line,
-          payload.selectionEnd.ch
-        ),
+        range: new monaco.Range(sLine, sCol, eLine, eCol),
         options: {
           className: 'teacher-selection-highlight',
           isWholeLine: false
@@ -568,23 +582,31 @@
       });
     }
 
-    // 原子更新装饰句柄
+    // Atomic update of decorations
     State.teacherDecorations = State.editor.deltaDecorations(
       State.teacherDecorations,
       newDecorations
     );
 
-    // 视口平滑跟随
-    if (State.followTeacherView) {
+    // Ensure student cursor is never snapped back to column 1
+    if (hasFocus && currentPos) {
+      State.editor.setPosition(currentPos);
+      if (currentSel && !currentSel.isEmpty()) {
+        State.editor.setSelection(currentSel);
+      }
+    }
+
+    // Viewport smooth follow (only if student is not currently focused/typing)
+    if (State.followTeacherView && !hasFocus) {
       State.editor.revealPositionInCenterIfOutsideViewport(
-        { lineNumber: line, column: ch },
+        { lineNumber: safeLine, column: safeCh },
         monaco.editor.ScrollType.Smooth
       );
     }
   }
 
   // ==========================================
-  // 11. 代码全量与增量同步处理
+  // 11. Code Full & Delta Synchronization
   // ==========================================
   function handleCodeFull(payload) {
     if (!State.editor || !payload) return;
@@ -592,11 +614,13 @@
     try {
       const currentModel = State.editor.getModel();
       const newLang = payload.language || 'plaintext';
+      const content = payload.content !== undefined && payload.content !== null ? payload.content : '';
+
       if (currentModel) {
-        currentModel.setValue(payload.content || '');
+        currentModel.setValue(content);
         monaco.editor.setModelLanguage(currentModel, newLang);
       } else {
-        const newModel = monaco.editor.createModel(payload.content || '', newLang);
+        const newModel = monaco.editor.createModel(content, newLang);
         State.editor.setModel(newModel);
       }
 
@@ -605,7 +629,19 @@
       DOM.fileInfo.textContent = '📄 ' + (payload.fileName || filePath);
       DOM.syntaxInfo.textContent = newLang.toUpperCase();
 
+      // Clear stale decorations from previous file to prevent invalid decoration handle errors
+      State.teacherDecorations = State.editor.deltaDecorations(State.teacherDecorations, []);
+
+      // Reset scroll position to top to eliminate blank/white screen bug when file sizes differ
+      State.editor.setScrollPosition({ scrollTop: 0, scrollLeft: 0 });
+      State.editor.setPosition({ lineNumber: 1, column: 1 });
+
+      // Immediate layout refresh
+      State.editor.layout();
+
       updateTreeActiveFile(filePath);
+    } catch (err) {
+      console.error('[EduPlus] handleCodeFull error:', err);
     } finally {
       State.isApplyingRemoteUpdate = false;
     }
@@ -613,7 +649,7 @@
 
   function handleCodeDelta(payload) {
     if (!State.editor || !payload) return;
-    // 忽略与当前活动查看文件不匹配的差量更新
+    // Ignore delta updates not matching currently active file
     if (payload.filePath && State.currentFilePath && payload.filePath !== State.currentFilePath) {
       return;
     }
@@ -622,14 +658,20 @@
       const model = State.editor.getModel();
       if (!model) return;
 
-      const startPos = model.getPositionAt(payload.rangeOffset);
-      const endPos = model.getPositionAt(payload.rangeOffset + (payload.oldLength || 0));
+      const docLen = model.getValueLength();
+      const safeOffset = Math.max(0, Math.min(payload.rangeOffset, docLen));
+      const safeOldLen = Math.max(0, Math.min(payload.oldLength || 0, docLen - safeOffset));
+
+      const startPos = model.getPositionAt(safeOffset);
+      const endPos = model.getPositionAt(safeOffset + safeOldLen);
 
       model.applyEdits([{
         range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
         text: payload.text || '',
         forceMoveMarkers: true
       }]);
+    } catch (err) {
+      console.warn('[EduPlus] handleCodeDelta error:', err);
     } finally {
       State.isApplyingRemoteUpdate = false;
     }
@@ -643,16 +685,16 @@
     if (State.isReadOnlyLocked) {
       DOM.lockIndicator.classList.add('locked');
       DOM.lockIcon.textContent = '🔒';
-      DOM.lockText.textContent = '老师独占演示 (只读)';
+      DOM.lockText.textContent = 'Teacher Exclusive (Read-only)';
     } else {
       DOM.lockIndicator.classList.remove('locked');
       DOM.lockIcon.textContent = '🔓';
-      DOM.lockText.textContent = '自主编辑模式';
+      DOM.lockText.textContent = 'Interactive Mode';
     }
   }
 
   // ==========================================
-  // 12. WebSocket 通信客户端与容错重连状态机
+  // 12. WebSocket Client & Fault Tolerance Reconnection
   // ==========================================
   const WSClient = {
     connect: function () {
@@ -660,18 +702,18 @@
         return;
       }
 
-      setConnectionStatus('CONNECTING', '正在连接协同服务...');
+      setConnectionStatus('CONNECTING', 'Connecting to collaboration server...');
 
       try {
         State.ws = new WebSocket(CONFIG.wsUrl);
       } catch (err) {
-        console.error('[WS] 创建连接失败:', err);
+        console.error('[WS] Connection creation failed:', err);
         WSClient.scheduleReconnect();
         return;
       }
 
       State.ws.onopen = function () {
-        setConnectionStatus('CONNECTED', '教学协同进行中');
+        setConnectionStatus('CONNECTED', 'Collab Active');
         State.reconnectAttempt = 0;
         if (DOM.btnReconnect) DOM.btnReconnect.style.display = 'none';
         WSClient.startHeartbeat();
@@ -682,18 +724,18 @@
           const msg = JSON.parse(event.data);
           WSClient.dispatchMessage(msg);
         } catch (e) {
-          console.warn('[WS] 解析消息失败:', e);
+          console.warn('[WS] Parse message error:', e);
         }
       };
 
       State.ws.onclose = function () {
-        setConnectionStatus('DISCONNECTED', '连接已断开');
+        setConnectionStatus('DISCONNECTED', 'Connection disconnected');
         WSClient.stopHeartbeat();
         WSClient.scheduleReconnect();
       };
 
       State.ws.onerror = function () {
-        setConnectionStatus('DISCONNECTED', '网络波动/连接失败');
+        setConnectionStatus('DISCONNECTED', 'Network jitter / connection failed');
       };
     },
 
@@ -765,13 +807,13 @@
       if (State.reconnectTimer) return;
       if (State.reconnectAttempt >= CONFIG.reconnectIntervals.length) {
         if (DOM.btnReconnect) DOM.btnReconnect.style.display = 'inline-block';
-        setConnectionStatus('DISCONNECTED', '连接中断，请手动重试');
+        setConnectionStatus('DISCONNECTED', 'Connection lost. Click Reconnect to retry');
         return;
       }
 
       const delay = CONFIG.reconnectIntervals[State.reconnectAttempt];
       State.reconnectAttempt++;
-      setConnectionStatus('RECONNECTING', `重连中 (${State.reconnectAttempt}/5)...`);
+      setConnectionStatus('RECONNECTING', `Reconnecting (${State.reconnectAttempt}/5)...`);
 
       State.reconnectTimer = setTimeout(function () {
         State.reconnectTimer = null;
@@ -788,20 +830,20 @@
 
   function updateCursorStatusUI(pos) {
     if (pos) {
-      DOM.cursorInfo.textContent = `行 ${pos.lineNumber}, 列 ${pos.column}`;
+      DOM.cursorInfo.textContent = `Ln ${pos.lineNumber}, Col ${pos.column}`;
     }
   }
 
   function updateSelectionStatusUI(sel) {
     if (sel && !sel.isEmpty()) {
-      DOM.selectionInfo.textContent = `已选 ${Math.abs(sel.endLineNumber - sel.startLineNumber) + 1} 行`;
+      DOM.selectionInfo.textContent = `${Math.abs(sel.endLineNumber - sel.startLineNumber) + 1} lines selected`;
     } else {
-      DOM.selectionInfo.textContent = '未选择';
+      DOM.selectionInfo.textContent = 'No selection';
     }
   }
 
   // ==========================================
-  // 13. 应用入口启动
+  // 13. Application Entrypoint
   // ==========================================
   bindUIEvents();
   initMonacoEditor();

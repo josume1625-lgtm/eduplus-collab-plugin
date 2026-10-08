@@ -1,46 +1,46 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.eduplus.collab.plugin</id>
-    <name>EduPlus Collab - 师生实时协同教学插件</name>
+    <name>EduPlus Collab - Real-time Teaching Collaboration Plugin</name>
     <vendor email="support@eduplus.com" url="https://www.eduplus.com">EduPlus Team</vendor>
 
     <description><![CDATA[
-    <h2>EduPlus 师生实时协同教学插件</h2>
-    <p>专为计算机编程教学场景设计的 IDEA 插件，支持：</p>
+    <h2>EduPlus Real-time Teaching Collaboration Plugin</h2>
+    <p>An IntelliJ IDEA plugin crafted for live computer science teaching and pair programming:</p>
     <ul>
-        <li><b>零外部依赖内嵌服务：</b>一键在 IDEA 内部启动轻量协同服务端。</li>
-        <li><b>代码实时单向/双向同步：</b>毫秒级延迟广播与编辑同步。</li>
-        <li><b>双光标可视化：</b>师生个性化光标（蓝色老师、橙色学生）、多行选区高亮与实时位置跟随。</li>
-        <li><b>教学控制模式：</b>老师优先独占模式与自由互动协同模式平滑切换。</li>
+        <li><b>Embedded Zero-dependency Server:</b> Launch a lightweight collaborative server directly within IDEA.</li>
+        <li><b>Real-time Code Sync:</b> Bi-directional, low-latency code broadcasting and collaborative editing.</li>
+        <li><b>Dual-cursor Visualization:</b> Personalized cursors (Teacher Blue, Student Orange) with multi-line selection highlights.</li>
+        <li><b>Teaching Control Modes:</b> Toggle smoothly between Teacher Exclusive (read-only) and Interactive Collaboration modes.</li>
     </ul>
     ]]></description>
 
-    <!-- 兼容依赖平台核心模块 -->
+    <!-- Platform compatibility dependencies -->
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- 注册右侧 ToolWindow 教学控制面板 -->
-        <toolWindow id="EduPlus 教学协同"
+        <!-- Right ToolWindow Teaching Control Panel -->
+        <toolWindow id="EduPlus Collab"
                     secondary="true"
                     icon="AllIcons.General.Web"
                     anchor="right"
                     factoryClass="com.eduplus.collab.ui.TeachingToolWindowFactory"/>
 
-        <!-- 注册 Project 级别服务，管理协作会话生命周期 -->
+        <!-- Project-level collaboration session manager -->
         <projectService serviceImplementation="com.eduplus.collab.service.TeachingSessionService"/>
 
-        <!-- 注册编辑监听与远程光标绘制机制 -->
+        <!-- Editor listener and remote cursor activity -->
         <postStartupActivity implementation="com.eduplus.collab.editor.CollabEditorStartupActivity"/>
     </extensions>
 
     <actions>
-        <!-- 菜单栏与工具栏快捷动作 -->
-        <group id="EduPlus.CollabGroup" text="教学协同" popup="true" icon="AllIcons.Actions.QuickfixBulb">
+        <!-- Menu and toolbar actions -->
+        <group id="EduPlus.CollabGroup" text="EduPlus Collab" popup="true" icon="AllIcons.Actions.QuickfixBulb">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="EduPlus.ToggleSession"
                     class="com.eduplus.collab.ui.action.ToggleCollabAction"
-                    text="启动/停止教学协同服务"
-                    description="快速切换本地协同服务端运行状态"/>
+                    text="Start/Stop EduPlus Collaboration"
+                    description="Toggle local collaboration server status"/>
         </group>
     </actions>
 </idea-plugin>

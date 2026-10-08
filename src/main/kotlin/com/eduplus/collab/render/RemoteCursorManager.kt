@@ -40,8 +40,8 @@ class RemoteCursorManager(private val project: Project) : Disposable {
             val docLength = editor.document.textLength
             val safeCursorOffset = cursorOffset.coerceIn(0, docLength)
 
-            // 1. 清理该学生旧的高亮标记
-            clearStudent(editor, studentId)
+            // 1. 清理该学生旧的高亮标记（使用其原先所在 editor 的 markupModel，杜绝跨 Tab 报错）
+            clearStudent(studentId)
 
             // 2. 渲染选区（如果存在有效选区）
             var selectionHighlighter: RangeHighlighter? = null
@@ -87,40 +87,53 @@ class RemoteCursorManager(private val project: Project) : Disposable {
     }
 
     /**
-     * 清理指定学生的高亮图层
+     * 清理指定学生的高亮图层（从其绑定宿主 Editor 的 MarkupModel 中安全移除）
      */
-    fun clearStudent(editor: Editor, studentId: String) {
+    fun clearStudent(studentId: String) {
         val session = studentVisuals.remove(studentId) ?: return
-        val markupModel = editor.markupModel
-        session.caretHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
-        session.selectionHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
+        try {
+            if (!session.editor.isDisposed) {
+                val mm = session.editor.markupModel
+                session.caretHighlighter?.let { if (it.isValid) mm.removeHighlighter(it) }
+                session.selectionHighlighter?.let { if (it.isValid) mm.removeHighlighter(it) }
+            }
+        } catch (_: Throwable) {
+            try { session.caretHighlighter?.dispose() } catch (_: Throwable) {}
+            try { session.selectionHighlighter?.dispose() } catch (_: Throwable) {}
+        }
     }
 
     /**
      * 根据学生ID移除远程光标与选区
      */
     fun removeStudentCursor(studentId: String) {
-        val session = studentVisuals.remove(studentId) ?: return
         ApplicationManager.getApplication().invokeLater {
-            if (session.editor.isDisposed) return@invokeLater
-            val markupModel = session.editor.markupModel
-            session.caretHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
-            session.selectionHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
+            clearStudent(studentId)
         }
     }
 
     /**
-     * 清理编辑器内的所有学生远程高亮
+     * 清理指定编辑器或所有编辑器内的学生远程高亮
      */
-    fun clearAll(editor: Editor) {
-        val markupModel = editor.markupModel
-        studentVisuals.values.forEach { session ->
-            if (session.editor == editor) {
-                session.caretHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
-                session.selectionHighlighter?.let { if (it.isValid) markupModel.removeHighlighter(it) }
+    fun clearAll(editor: Editor? = null) {
+        val it = studentVisuals.entries.iterator()
+        while (it.hasNext()) {
+            val entry = it.next()
+            val session = entry.value
+            if (editor == null || session.editor == editor) {
+                try {
+                    if (!session.editor.isDisposed) {
+                        val mm = session.editor.markupModel
+                        session.caretHighlighter?.let { if (it.isValid) mm.removeHighlighter(it) }
+                        session.selectionHighlighter?.let { if (it.isValid) mm.removeHighlighter(it) }
+                    }
+                } catch (_: Throwable) {
+                    try { session.caretHighlighter?.dispose() } catch (_: Throwable) {}
+                    try { session.selectionHighlighter?.dispose() } catch (_: Throwable) {}
+                }
+                it.remove()
             }
         }
-        studentVisuals.clear()
     }
 
     override fun dispose() {

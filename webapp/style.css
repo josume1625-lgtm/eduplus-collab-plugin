@@ -557,36 +557,51 @@ html, body {
 }
 
 /* ==========================================================================
-   4. Monaco Editor 覆盖双光标高亮系统
+   4. Monaco Editor Dual-Cursor Overlay System
    ========================================================================== */
+.monaco-editor .cursors-layer {
+  z-index: 25 !important;
+}
+
+.monaco-editor .cursors-layer .cursor {
+  z-index: 30 !important;
+}
+
 .monaco-editor .teacher-cursor-line {
-  background-color: var(--teacher-color) !important;
-  width: 2px !important;
-  box-shadow: 0 0 8px var(--teacher-color-glow);
+  border-left: 2px solid var(--teacher-color) !important;
+  margin-left: -1px;
+  position: absolute !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+  pointer-events: none !important;
+  z-index: 15 !important;
   animation: teacherCursorBlink 1.2s infinite ease-in-out;
 }
 
 @keyframes teacherCursorBlink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  50% { opacity: 0.25; }
+}
+
+.monaco-editor .teacher-cursor-line::before {
+  content: '👨‍🏫 Teacher';
+  position: absolute;
+  top: -18px;
+  left: -2px;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: bold;
+  background-color: var(--teacher-badge-bg);
+  color: var(--teacher-badge-text);
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 35;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 .monaco-editor .teacher-selection-highlight {
   background-color: var(--teacher-selection-bg) !important;
   border-radius: 2px;
-}
-
-.teacher-cursor-badge {
-  background-color: var(--teacher-badge-bg);
-  color: var(--teacher-badge-text);
-  font-size: 10px;
-  font-weight: bold;
-  padding: 1px 4px;
-  border-radius: 3px;
-  position: absolute;
-  top: -18px;
-  left: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
 }

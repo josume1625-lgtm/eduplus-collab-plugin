@@ -21,8 +21,8 @@ class ToggleCollabAction : AnAction() {
             service.stopSession()
         }
 
-        // 打开右侧 ToolWindow
-        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("EduPlus 教学协同")
+        // Open right ToolWindow
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("EduPlus Collab")
         toolWindow?.show()
     }
 

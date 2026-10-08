@@ -1,75 +1,75 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EduPlus 教学协同工作台 - 学生端</title>
-  <!-- 本地样式 -->
+  <title>EduPlus Teaching Studio - Student</title>
+  <!-- Local Styles -->
   <link rel="stylesheet" href="./style.css" />
-  <!-- 本地 Monaco CSS (100% 离线) -->
+  <!-- Local Monaco CSS (100% Offline) -->
   <link rel="stylesheet" href="./vs/editor/editor.main.css" />
 </head>
 <body>
   <div id="app-container">
-    <!-- 1. 顶部协同状态导航栏 -->
+    <!-- 1. Top Collab Navbar -->
     <header id="top-navbar">
       <div class="nav-left">
-        <button id="toggleSidebarBtn" class="btn-icon" title="切换目录树侧边栏">📁</button>
+        <button id="toggleSidebarBtn" class="btn-icon" title="Toggle project explorer sidebar">📁</button>
         <div class="brand-logo">
           <span class="logo-icon">⚡</span>
-          <span class="logo-text">EduPlus 协同工作台</span>
+          <span class="logo-text">EduPlus Studio</span>
         </div>
         <div class="classroom-info">
-          <span class="badge badge-room" id="roomBadge">课堂: ROOM_101</span>
-          <span class="badge badge-user" id="userBadge">学生: 连接中...</span>
+          <span class="badge badge-room" id="roomBadge">Room: ROOM_101</span>
+          <span class="badge badge-user" id="userBadge">Student: Connecting...</span>
         </div>
       </div>
 
       <div class="nav-center">
-        <!-- 老师演示模式与只读锁状态 -->
+        <!-- Teaching mode & read-only lock indicator -->
         <div class="lock-indicator" id="lockIndicator">
           <span class="lock-icon" id="lockIcon">🔓</span>
-          <span class="lock-text" id="lockText">自主编辑模式</span>
+          <span class="lock-text" id="lockText">Interactive Mode</span>
         </div>
-        <div class="follow-teacher-toggle" id="followTeacherToggle" title="当老师讲解时，窗口自动平滑滚至老师光标处">
+        <div class="follow-teacher-toggle" id="followTeacherToggle" title="Smoothly scroll to teacher cursor when teacher is active">
           <input type="checkbox" id="followTeacherCheckbox" checked />
-          <label for="followTeacherCheckbox">跟随老师视口</label>
+          <label for="followTeacherCheckbox">Follow Teacher</label>
         </div>
       </div>
 
       <div class="nav-right">
-        <!-- 学生端申请运行当前代码按钮 -->
-        <button id="btnStudentRun" class="btn-run" title="向老师申请在本地运行当前代码">▶ 申请运行代码</button>
-        <!-- 切换运行控制台面板按钮 -->
-        <button id="toggleTerminalBtn" class="btn-tool" title="打开/关闭程序运行结果面板">▶ 运行结果</button>
-        <div class="network-latency" id="networkLatency" title="WebSocket 双向延迟">
+        <!-- Request Run Code button -->
+        <button id="btnStudentRun" class="btn-run" title="Request teacher to run current code on host IDEA">▶ Run Code</button>
+        <!-- Toggle Terminal Panel button -->
+        <button id="toggleTerminalBtn" class="btn-tool" title="Open/Close program output panel">▶ Console</button>
+        <div class="network-latency" id="networkLatency" title="WebSocket round-trip latency">
           <span class="latency-dot"></span>
           <span class="latency-val" id="latencyVal">-- ms</span>
         </div>
         <div class="status-capsule status-connecting" id="connStatusCapsule">
           <span class="status-indicator-dot" id="statusDot"></span>
-          <span class="status-text" id="statusText">正在连接...</span>
+          <span class="status-text" id="statusText">Connecting...</span>
         </div>
-        <button class="btn btn-reconnect" id="btnReconnect" style="display: none;">手动重连</button>
+        <button class="btn btn-reconnect" id="btnReconnect" style="display: none;">Reconnect</button>
       </div>
     </header>
 
-    <!-- 2. 中间工作台布局 (左侧目录树 + 中间编辑与页签区) -->
+    <!-- 2. Workspace Layout (File Tree + Tabs + Monaco + Terminal) -->
     <div id="workspace-layout">
-      <!-- 左侧项目文件树侧边栏 -->
+      <!-- File Tree Sidebar -->
       <aside id="file-tree-sidebar">
         <div class="sidebar-header">
-          <span class="sidebar-title">📁 项目资源管理器</span>
-          <button id="refreshTreeBtn" class="btn-icon-small" title="刷新项目目录树">🔄</button>
+          <span class="sidebar-title">📁 Project Explorer</span>
+          <button id="refreshTreeBtn" class="btn-icon-small" title="Refresh project tree">🔄</button>
         </div>
         <div id="file-tree-container" class="file-tree-scroll">
-          <div class="tree-loading">正在读取项目结构...</div>
+          <div class="tree-loading">Loading project structure...</div>
         </div>
       </aside>
 
-      <!-- 中间主编辑区 -->
+      <!-- Main Editor Area -->
       <main id="editor-main-panel">
-        <!-- 多个页签栏 -->
+        <!-- Multi-tab Bar -->
         <div id="tabs-bar-container">
           <div id="editor-tabs" class="tabs-scroll">
             <div class="tab-item active" data-path="Active.java">
@@ -79,41 +79,41 @@
           </div>
         </div>
 
-        <!-- Monaco Editor 宿主容器 -->
+        <!-- Monaco Editor Host Wrapper -->
         <div id="monaco-wrapper">
           <div id="monaco-host"></div>
         </div>
 
-        <!-- 下方运行结果控制台面板 (同步显示老师端运行输出) -->
+        <!-- Console / Terminal Panel -->
         <section id="terminal-panel">
           <div class="terminal-header">
             <div class="terminal-title">
               <span class="terminal-icon">▶</span>
-              <span>程序运行结果 (Console / Terminal Output)</span>
-              <span id="runStatusBadge" class="badge-run-status">空闲 就绪</span>
+              <span>Program Output (Console / Terminal)</span>
+              <span id="runStatusBadge" class="badge-run-status">Idle Ready</span>
             </div>
             <div class="terminal-actions">
-              <button id="clearTerminalBtn" class="btn-terminal-action" title="清空输出">清屏</button>
-              <button id="collapseTerminalBtn" class="btn-terminal-action" title="折叠/展开">折叠</button>
+              <button id="clearTerminalBtn" class="btn-terminal-action" title="Clear console output">Clear</button>
+              <button id="collapseTerminalBtn" class="btn-terminal-action" title="Collapse/Expand panel">Collapse</button>
             </div>
           </div>
           <div id="terminal-content">
-            <div class="terminal-line terminal-system">EduPlus 终端已就绪。当老师在 IDEA 中点击运行 (Run) 时，控制台输出将在此毫秒级同步展示...</div>
+            <div class="terminal-line terminal-system">EduPlus terminal ready. When teacher runs code in IDEA, output is streamed here in real time...</div>
           </div>
         </section>
       </main>
     </div>
 
-    <!-- 3. 底部状态栏 -->
+    <!-- 3. Bottom Status Bar -->
     <footer id="bottom-statusbar">
       <div class="footer-left">
         <span class="footer-item" id="fileInfo">📄 Active.java</span>
-        <span class="footer-item" id="cursorInfo">行 1, 列 1</span>
-        <span class="footer-item" id="selectionInfo">未选择</span>
+        <span class="footer-item" id="cursorInfo">Ln 1, Col 1</span>
+        <span class="footer-item" id="selectionInfo">No selection</span>
       </div>
       <div class="footer-right">
         <span class="footer-item teacher-state-badge" id="teacherPresenceBadge">
-          <span class="teacher-dot"></span> 老师在线
+          <span class="teacher-dot"></span> Teacher Online
         </span>
         <span class="footer-item" id="encodingInfo">UTF-8</span>
         <span class="footer-item" id="syntaxInfo">Java</span>
@@ -121,14 +121,13 @@
     </footer>
   </div>
 
-  <!-- Monaco 100% 离线依赖：严格禁止外网第三方探测，断网秒级启动 -->
+  <!-- Monaco 100% Offline loader -->
   <script src="./vs/loader.js"></script>
   <script>
     require.config({
       paths: { 'vs': './vs' }
     });
     require(['vs/editor/editor.main'], function() {
-      // 本地 Monaco 加载就绪，装载核心逻辑脚本
       var appScript = document.createElement('script');
       appScript.src = './app.js';
       document.body.appendChild(appScript);

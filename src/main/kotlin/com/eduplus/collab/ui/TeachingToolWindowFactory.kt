@@ -14,7 +14,7 @@ class TeachingToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = TeachingControlPanel(project)
         val contentFactory = ContentFactory.getInstance()
-        val content = contentFactory.createContent(panel, "教学面板", false)
+        val content = contentFactory.createContent(panel, "Teaching Panel", false)
         toolWindow.contentManager.addContent(content)
     }
 }

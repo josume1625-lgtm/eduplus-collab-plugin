@@ -195,7 +195,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                 addProperty("type", "teacher_lock_state")
                 val payload = JsonObject().apply {
                     addProperty("isLocked", newMode == TeachingMode.TEACHER_EXCLUSIVE)
-                    addProperty("reason", if (newMode == TeachingMode.TEACHER_EXCLUSIVE) "老师独占讲解演示中" else "自由协同提问模式")
+                    addProperty("reason", if (newMode == TeachingMode.TEACHER_EXCLUSIVE) "Teacher Exclusive Demo" else "Interactive Collaboration Mode")
                 }
                 add("payload", payload)
             }
@@ -292,7 +292,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
             override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {
                 val uri = handshake.resourceDescriptor ?: ""
                 val studentId = extractParam(uri, "userId") ?: ("stu_" + (1000..9999).random())
-                val studentName = extractParam(uri, "name") ?: ("学生·" + studentId.takeLast(4))
+                val studentName = extractParam(uri, "name") ?: ("Student_" + studentId.takeLast(4))
 
                 clientSockets[studentId] = conn
                 addOrUpdatePeer(RemotePeer(
@@ -362,7 +362,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                     val line = payload.get("line")?.asInt ?: 1
                     val ch = payload.get("ch")?.asInt ?: 1
                     val studentId = payload.get("studentId")?.asString ?: "stu_anon"
-                    val studentName = payload.get("studentName")?.asString ?: "学生"
+                    val studentName = payload.get("studentName")?.asString ?: "Student"
                     val selStart = payload.getAsJsonObject("selectionStart")
                     val selEnd = payload.getAsJsonObject("selectionEnd")
 
@@ -419,6 +419,12 @@ class TeachingSessionService(private val project: Project) : Disposable {
                                         } else if (text.isNotEmpty()) {
                                             doc.insertString(safeOffset, text)
                                         }
+
+                                        // 当学生在老师光标同一位置键入时，同步推进老师端光标，保证两端光标紧随输入字符
+                                        val currentCaret = editor.caretModel.currentCaret
+                                        if (currentCaret.offset == safeOffset && text.isNotEmpty()) {
+                                            currentCaret.moveToOffset(safeOffset + text.length)
+                                        }
                                     } finally {
                                         doc.putUserData(RemoteApplyGuard.IS_REMOTE_EDIT_KEY, null)
                                     }
@@ -434,7 +440,13 @@ class TeachingSessionService(private val project: Project) : Disposable {
                     val target = File(base, relPath)
                     if (target.exists() && target.isFile) {
                         try {
-                            val content = target.readText(Charsets.UTF_8)
+                            // 优先读取已打开编辑器的最新未保存内存缓冲，其次回退到磁盘
+                            val fileEditorManager = FileEditorManager.getInstance(project)
+                            val openVf = fileEditorManager.openFiles.firstOrNull { vf ->
+                                getRelativePath(vf) == relPath
+                            }
+                            val doc = openVf?.let { FileDocumentManager.getInstance().getDocument(it) }
+                            val content = doc?.text ?: target.readText(Charsets.UTF_8)
                             val ext = target.extension
                             val full = JsonObject().apply {
                                 addProperty("type", "code_full")
@@ -449,7 +461,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                             }
                             conn.send(gson.toJson(full))
                         } catch (e: Exception) {
-                            LOG.warn("[EduPlus] 读取文件失败: $relPath", e)
+                            LOG.warn("[EduPlus] Failed to read file: $relPath", e)
                         }
                     }
                 }
@@ -457,19 +469,19 @@ class TeachingSessionService(private val project: Project) : Disposable {
                     broadcastProjectTree(conn)
                 }
                 "student_request_run" -> {
-                    // 学生申请运行当前代码文件，弹出老师端二次确认对话框
+                    // 学生申请运行当前代码文件，弹出老师端二次确认对话框 (English UI)
                     val payload = json.getAsJsonObject("payload") ?: return
                     val studentId = payload.get("studentId")?.asString ?: "stu"
-                    val studentName = payload.get("studentName")?.asString ?: "学生"
-                    val filePath = payload.get("filePath")?.asString ?: "当前文件"
+                    val studentName = payload.get("studentName")?.asString ?: "Student"
+                    val filePath = payload.get("filePath")?.asString ?: "Active File"
 
                     ApplicationManager.getApplication().invokeLater {
                         val answer = Messages.showYesNoDialog(
                             project,
-                            "👨‍🎓 学生【$studentName】申请在您的本地 IDEA 中运行代码文件：\n\n📄 $filePath\n\n是否允许并立即执行该程序？",
-                            "EduPlus 协同课堂 - 代码运行申请",
-                            "允许运行 (Run)",
-                            "拒绝 (Reject)",
+                            "👨‍🎓 Student [$studentName] requests to run code file on your machine:\n\n📄 $filePath\n\nDo you allow executing this program locally?",
+                            "EduPlus Student Run Request",
+                            "Allow (Run)",
+                            "Reject",
                             Messages.getQuestionIcon()
                         )
 
@@ -479,7 +491,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                             val p = JsonObject().apply {
                                 addProperty("approved", approved)
                                 addProperty("studentId", studentId)
-                                addProperty("message", if (approved) "老师已批准运行申请，程序正在启动..." else "老师拒绝了此次运行申请。")
+                                addProperty("message", if (approved) "Teacher approved run request, launching..." else "Teacher rejected the run request.")
                             }
                             add("payload", p)
                         }
@@ -591,9 +603,10 @@ class TeachingSessionService(private val project: Project) : Disposable {
                 val msg = JsonObject().apply {
                     addProperty("type", "cursor_teacher")
                     val payload = JsonObject().apply {
+                        addProperty("filePath", getRelativePath(file))
                         addProperty("line", pos.line + 1)
                         addProperty("ch", pos.column + 1)
-                        addProperty("teacherName", "老师")
+                        addProperty("teacherName", "Teacher")
                         if (caret.hasSelection()) {
                             val selStart = JsonObject().apply {
                                 val sp = caret.editor.offsetToLogicalPosition(caret.selectionStart)
@@ -615,26 +628,33 @@ class TeachingSessionService(private val project: Project) : Disposable {
             }
         }, this)
 
-        // 3. 文件/多页签切换监听
+        // 3. 文件/多页签切换监听（平滑切换，避免选区冲突和白屏）
         project.messageBus.connect(this).subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
             override fun selectionChanged(event: FileEditorManagerEvent) {
                 if (status == ConnectionStatus.IDLE) return
+                remoteCursorManager?.clearAll()
                 broadcastTabs()
                 ApplicationManager.getApplication().invokeLater {
-                    val editor = event.manager.selectedTextEditor ?: return@invokeLater
-                    val file = event.newFile ?: return@invokeLater
-                    if (!file.isValid || file.isDirectory) return@invokeLater
+                    val file = event.newFile
+                    if (file == null || !file.isValid || file.isDirectory) {
+                        return@invokeLater
+                    }
                     val basePath = project.basePath ?: return@invokeLater
                     if (!file.path.startsWith(basePath)) return@invokeLater
 
                     val relPath = getRelativePath(file)
+                    val doc = FileDocumentManager.getInstance().getDocument(file)
+                    val content = doc?.text ?: runCatching {
+                        file.contentsToByteArray().toString(Charsets.UTF_8)
+                    }.getOrDefault("")
+
                     val full = JsonObject().apply {
                         addProperty("type", "code_full")
                         val payload = JsonObject().apply {
                             addProperty("filePath", relPath)
                             addProperty("fileName", file.name)
                             addProperty("language", mapLanguage(file.extension))
-                            addProperty("content", editor.document.text)
+                            addProperty("content", content)
                             addProperty("version", seqCounter.incrementAndGet())
                         }
                         add("payload", payload)
@@ -651,6 +671,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
 
             override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
                 if (status == ConnectionStatus.IDLE) return
+                remoteCursorManager?.clearAll()
                 broadcastTabs()
             }
         })
@@ -679,7 +700,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                         val errMsg = JsonObject().apply {
                             addProperty("type", "execution_output")
                             val p = JsonObject().apply {
-                                addProperty("text", "\n=== ❌ 进程未能启动: ${cause?.message ?: "编译失败或运行配置未就绪"} ===\n")
+                                addProperty("text", "\n=== ❌ Process failed to start: ${cause?.message ?: "Compilation failed or run configuration not ready"} ===\n")
                                 addProperty("isStderr", true)
                                 addProperty("isSystem", true)
                             }
@@ -718,7 +739,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                                 addProperty("type", "execution_status")
                                 val p = JsonObject().apply {
                                     addProperty("status", "started")
-                                    addProperty("title", "项目编译构建")
+                                    addProperty("title", "Project Build & Compile")
                                     addProperty("time", System.currentTimeMillis())
                                 }
                                 add("payload", p)
@@ -748,7 +769,7 @@ class TeachingSessionService(private val project: Project) : Disposable {
                                 val errOut = JsonObject().apply {
                                     addProperty("type", "execution_output")
                                     val p = JsonObject().apply {
-                                        addProperty("text", "\n=== ❌ 编译构建未通过 ===\n$failureDetails\n")
+                                        addProperty("text", "\n=== ❌ Build / Compilation Failed ===\n$failureDetails\n")
                                         addProperty("isStderr", true)
                                         addProperty("isSystem", true)
                                     }

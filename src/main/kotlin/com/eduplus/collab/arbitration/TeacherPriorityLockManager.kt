@@ -76,7 +76,7 @@ class TeacherPriorityLockManager(
                 val remaining = expireAt - now
                 return ArbitrationResult.Blocked(
                     remainingMs = remaining,
-                    reason = "👨‍🏫 老师正在书写演示，输入已锁定"
+                    reason = "👨‍🏫 Teacher is typing, input is temporarily locked"
                 )
             }
         }

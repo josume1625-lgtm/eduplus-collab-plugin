@@ -25,7 +25,7 @@ class CursorLegendCard : JPanel() {
             JBUI.Borders.empty(10, 12)
         )
 
-        val titleLabel = JBLabel("师生双光标视觉图例").apply {
+        val titleLabel = JBLabel("Cursor Visual Legend").apply {
             font = JBFont.regular().asBold()
             foreground = JBColor(0x333333, 0xBBBBBB)
             alignmentX = Component.LEFT_ALIGNMENT
@@ -33,19 +33,19 @@ class CursorLegendCard : JPanel() {
         add(titleLabel)
         add(Box.createVerticalStrut(8))
 
-        // 老师项
+        // Teacher
         add(createLegendRow(
             roleName = UserRole.TEACHER.displayName,
             badgeColor = UserRole.TEACHER.badgeColor,
-            desc = "蓝色光标：主讲教师指针，拥有代码讲解广播与全局高亮权限"
+            desc = "Blue Cursor: Teacher pointer with code broadcast and highlight authority."
         ))
         add(Box.createVerticalStrut(6))
 
-        // 学生项
+        // Student
         add(createLegendRow(
             roleName = UserRole.STUDENT.displayName,
             badgeColor = UserRole.STUDENT.badgeColor,
-            desc = "橙色光标：互动学生指针，受模式管控，实时呈现焦点选区"
+            desc = "Orange Cursor: Student pointer showing real-time focus and selections."
         ))
     }
 
